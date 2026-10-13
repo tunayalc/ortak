@@ -101,6 +101,53 @@ def ensure_capacity(required: int = 1) -> None:
                 raise GoogleUsageBlocked("İşlem için bütçe kapasitesi yetersiz; yeni Google çağrısı yapılmadı.")
 
 
+def search_operations(group_size: int, candidates: int, input_mode: str) -> dict[str, int]:
+    return {"geocoding": int(input_mode == "synthetic"), "places_nearby_new": 1,
+            "routes_compute_routes": group_size * candidates}
+
+
+def operation_capacity(operations: dict[str, int], status: dict | None = None) -> dict:
+    if any(key not in OPERATIONS or type(count) is not int or count < 0 for key, count in operations.items()):
+        raise ValueError("Geçersiz Google işlem sayısı.")
+    settings = get_settings()
+    status = usage_status() if status is None else status
+    counts = {key: count * settings.google_maps_max_attempts for key, count in operations.items()}
+    reason = ""
+    if not status["calls_enabled"]:
+        reason = "Google kullanımı şu anda kapalı."
+    elif sum(counts.values()) > status["remaining_today"]:
+        reason = "Seçilen işlem için günlük Google kotası yetersiz."
+    elif settings.google_budget_protected:
+        if "estimated_cost_tl" not in status or "service_remaining" not in status:
+            reason = status.get("unavailable_reason") or "Bütçe ve kullanım kaydı doğrulanamadı."
+        else:
+            for service, names in SERVICE_OPERATIONS.items():
+                if sum(counts.get(name, 0) for name in names) > status["service_remaining"][service]:
+                    reason = "Seçilen işlem için Google servis kotası yetersiz."
+                    break
+            if not reason:
+                prices = verified_prices()
+                cost = sum(count * prices[key] for key, count in counts.items())
+                if status["estimated_cost_tl"] + cost > settings.google_budget_limit_tl + 1e-8:
+                    reason = "Seçilen işlem için korunan kullanım bütçesi yetersiz."
+    return {"available": not reason, "reason": reason}
+
+
+def ensure_operation_capacity(operations: dict[str, int]) -> None:
+    capacity = operation_capacity(operations)
+    if not capacity["available"]:
+        raise GoogleUsageBlocked(capacity["reason"] + " Yeni Google isteği gönderilmedi.")
+
+
+def search_capacity(status: dict) -> dict:
+    settings = get_settings()
+    maximum = settings.public_max_participants if settings.production else 12
+    candidates = settings.public_max_candidates if settings.production else 12
+    return {mode: {str(size): operation_capacity(search_operations(size, candidates, mode), status)
+                   for size in range(2, maximum + 1)}
+            for mode in ("synthetic", "resolved_coordinates")}
+
+
 def reserve_call(operation: str, attempt: int) -> int:
     settings = get_settings()
     if not settings.google_maps_calls_enabled:

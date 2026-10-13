@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:live": "node tests/live_acceptance.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.2",

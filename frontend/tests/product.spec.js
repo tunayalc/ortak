@@ -207,3 +207,73 @@ test('açık ve koyu tema, klavye, taşma', async ({ page }, testInfo) => {
   await page.keyboard.press('Tab')
   await expect(page.getByLabel('Mekân türü')).toBeFocused()
 })
+
+test('doğrulanan linkler koordinat olarak aktarılır ve delta değişince yeniden çözülmez', async ({ page }) => {
+  let parses = 0
+  let scenarioPayload
+  await page.route('**/api/locations/parse', (route) => {
+    parses++
+    return route.fulfill({ json: [1, 2, 3].map((i) => ({ label: `Katılımcı ${i}`, lat: 39.92, lng: 32.85,
+      source: 'google_geocoding', location_input_type: 'geocoded_text', error: null, delta_weight: 1 })) })
+  })
+  page.on('request', (request) => { if (request.url().endsWith('/api/scenarios')) scenarioPayload = request.postDataJSON() })
+  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
+  const inputs = page.getByLabel('Link veya koordinat', { exact: true })
+  for (const input of await inputs.all()) await input.fill('https://www.google.com/maps?q=Ankara')
+  await page.getByRole('button', { name: 'Konumları doğrula', exact: true }).click()
+  await expect(page.locator('.parse-status.pass')).toHaveCount(3)
+  await page.getByLabel('Katılımcı 1 yakınlık ağırlığı').fill('2')
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect(page.locator('.recommendation-card')).toHaveCount(3)
+  expect(parses).toBe(1)
+  expect(scenarioPayload.participant_locations[0].value).toBe('39.92,32.85')
+  expect(scenarioPayload.participant_locations[0].delta_weight).toBe(2)
+  await expect(inputs.first()).toHaveValue('https://www.google.com/maps?q=Ankara')
+})
+
+test('arama sonrası kota yenilenir; mevcut öneriler yine güncellenebilir', async ({ page }) => {
+  let exhausted = false
+  let routes = 0
+  await page.route('**/api/runtime-config', (route) => route.fulfill({ json: exhausted
+    ? { ...runtime, google_available: false, google_remaining_requests: 0, google_unavailable_reason: 'Günlük kota doldu.' }
+    : runtime }))
+  await page.route('**/api/routes/matrix', async (route) => {
+    routes++
+    const response = await route.fetch()
+    exhausted = true
+    await route.fulfill({ response })
+  })
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect(page.locator('.recommendation-card')).toHaveCount(3)
+  await expect(page.getByRole('button', { name: 'Öneri üret', exact: true })).toBeDisabled()
+  await expect(page.getByText(/Günlük kota doldu/)).toBeVisible()
+  await page.getByRole('button', { name: /Puan öncelikli/ }).click()
+  await expect(page.getByRole('button', { name: 'Güncelle', exact: true })).toBeEnabled()
+  expect(routes).toBe(1)
+})
+
+test('kesilen rota adımı aynı senaryoyla sürer; aday araması tekrarlanmaz', async ({ page }) => {
+  let routes = 0
+  let scenarios = 0
+  let candidates = 0
+  const ids = []
+  page.on('request', (request) => {
+    if (request.url().endsWith('/api/scenarios') && request.method() === 'POST') scenarios++
+    if (request.url().endsWith('/api/candidates/search')) candidates++
+  })
+  await page.route('**/api/routes/matrix', async (route) => {
+    ids.push(route.request().postDataJSON().scenario_id)
+    routes++
+    if (routes === 1) return route.fulfill({ status: 502, json: { detail: 'Geçici rota hatası.' } })
+    const response = await route.fetch()
+    return route.fulfill({ response })
+  })
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Rotaları tamamla', exact: true })).toBeEnabled()
+  await expect(page.locator('.recommendation-card')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Rotaları tamamla', exact: true }).click()
+  await expect(page.locator('.recommendation-card')).toHaveCount(3)
+  expect(scenarios).toBe(1)
+  expect(candidates).toBe(1)
+  expect(ids[0]).toBe(ids[1])
+})

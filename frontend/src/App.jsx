@@ -915,6 +915,8 @@ export default function App() {
   const [inputMode, setInputMode] = useState('synthetic')
   const [participantLocations, setParticipantLocations] = useState(() => makeParticipantRows(initialScenario.group_size))
   const [parsedLocations, setParsedLocations] = useState([])
+  const parsedLocationValues = useRef('')
+  const [routeRecovery, setRouteRecovery] = useState(null)
   const [criteriaProfile, setCriteriaProfile] = useState('balanced')
   const [criterionWeights, setCriterionWeights] = useState(initialCriterionWeights)
   const [intentText, setIntentText] = useState('')
@@ -959,9 +961,11 @@ export default function App() {
   const currentSearchContext = useRef(searchContext)
   currentSearchContext.current = searchContext
   const canReuseRoutes = Boolean(scenario && response && scenarioContext === searchContext)
+  const selectedCapacity = runtimeConfig?.google_search_capacity?.[inputMode === 'link' ? 'resolved_coordinates' : 'synthetic']?.[scenarioForm.group_size]
   const canStartSearch = Boolean(runtimeConfig && (
-    runtimeConfig.google_available || (!runtimeConfig.production && health?.google_configured === false)
+    (runtimeConfig.google_available && selectedCapacity?.available !== false) || (!runtimeConfig.production && health?.google_configured === false)
   ))
+  const canResumeRoutes = Boolean(scenario && routeRecovery?.scenarioId === scenario.id && routeRecovery.context === searchContext)
 
   useEffect(() => {
     if (scenarioContext !== null && scenarioContext !== searchContext) {
@@ -969,6 +973,7 @@ export default function App() {
       setSelectedId(null)
       setExperiment(null)
       setCounts({ candidates: 0, routes: 0 })
+      setRouteRecovery(null)
     }
   }, [scenarioContext, searchContext])
 
@@ -985,12 +990,26 @@ export default function App() {
   async function refreshAiStatus() {
     setCheckingAi(true)
     try {
-      setRuntimeConfig(await api.runtimeConfig())
+      await refreshRuntimeConfig()
       setHealth(await api.health())
     } catch {
       setHealth((current) => ({ ...current, ai_ready: false, ai_status: 'backend_unreachable' }))
     } finally {
       setCheckingAi(false)
+    }
+  }
+
+  async function refreshRuntimeConfig() {
+    const config = await api.runtimeConfig()
+    setRuntimeConfig(config)
+    return config
+  }
+
+  function checkSearchCapacity(config) {
+    if (!config.production && health?.google_configured === false) return
+    const capacity = config.google_search_capacity?.[inputMode === 'link' ? 'resolved_coordinates' : 'synthetic']?.[scenarioForm.group_size]
+    if (!config.google_available || capacity?.available === false) {
+      throw new Error(capacity?.reason || config.google_unavailable_reason || 'Bu arama için yeterli Google kapasitesi yok.')
     }
   }
 
@@ -1017,7 +1036,7 @@ export default function App() {
     setParticipantLocations((current) => current.map((item, itemIndex) => (
       itemIndex === index ? { ...item, [key]: value } : item
     )))
-    setParsedLocations([])
+    if (key === 'value') setParsedLocations([])
     setIntentSuggestion(null)
     if (key === 'delta_weight') setAiApplied(false)
   }
@@ -1039,7 +1058,6 @@ export default function App() {
 
   function balanceParticipants() {
     setParticipantLocations((current) => current.map((item) => ({ ...item, delta_weight: 1 })))
-    setParsedLocations([])
     setIntentSuggestion(null)
     setAiApplied(false)
     if (canReuseRoutes) {
@@ -1108,10 +1126,13 @@ export default function App() {
 
   async function parseParticipantLocations() {
     if (inputMode !== 'link') return []
+    const values = JSON.stringify(participantLocations.map((person) => person.value))
+    if (parsedLocationValues.current === values && parsedLocations.length === participantLocations.length && parsedLocations.every((item) => !item.error && Number.isFinite(item.lat) && Number.isFinite(item.lng))) return parsedLocations
     setBusy('parse')
     try {
       const result = await api.parseLocations({ items: participantLocations })
       setParsedLocations(result)
+      parsedLocationValues.current = values
       const failed = result.filter((item) => item.error)
       if (failed.length) {
         throw new Error('Bazı kişi konumları çözülemedi. Lütfen satırları kontrol edin.')
@@ -1209,7 +1230,7 @@ export default function App() {
         session_only: false,
       }
     }
-    await parseParticipantLocations()
+    const parsed = await parseParticipantLocations()
     return {
       ...scenarioForm,
       group_size: participantLocations.length,
@@ -1217,13 +1238,14 @@ export default function App() {
       session_only: true,
       participant_locations: participantLocations.map((person, index) => ({
         ...person,
+        value: `${parsed[index].lat},${parsed[index].lng}`,
         delta_weight: overrides.participantWeights?.[`user-${index + 1}`] ?? person.delta_weight,
       })),
     }
   }
 
   async function runPipeline(overrides = {}) {
-    if (!canStartSearch || busy || pipelineInFlight.current) return
+    if ((!canStartSearch && !canResumeRoutes) || busy || pipelineInFlight.current) return
     pipelineInFlight.current = true
     const ensureUnchangedInputs = () => {
       if (currentSearchContext.current !== searchContext) {
@@ -1234,30 +1256,37 @@ export default function App() {
     setExperiment(null)
     setResponse(null)
     setSelectedId(null)
-    setCounts({ candidates: 0, routes: 0 })
+    if (!canResumeRoutes) setCounts({ candidates: 0, routes: 0 })
+    let created = canResumeRoutes ? scenario : null
+    let step = canResumeRoutes ? 'routes' : 'scenario'
     try {
       setBusy('scenario')
-      if (scenario?.session_only) {
-        await api.deleteScenario(scenario.id).catch(() => {})
-        setScenario(null)
+      const config = await refreshRuntimeConfig()
+      if (!canResumeRoutes) {
+        checkSearchCapacity(config)
+        const payload = await buildScenarioPayload(overrides)
+        ensureUnchangedInputs()
+        checkSearchCapacity(await refreshRuntimeConfig())
+        if (scenario?.session_only) await api.deleteScenario(scenario.id).catch(() => {})
+        setRouteRecovery(null)
+        setBusy('scenario')
+        created = await api.createScenario(payload)
+        setScenario(created)
+        setScenarioContext(searchContext)
+        ensureUnchangedInputs()
+        step = 'candidates'
+        setBusy('candidates')
+        const candidates = await api.searchCandidates({
+          scenario_id: created.id,
+          max_results: config.max_candidates || 3,
+          radius_m: scenarioForm.radius_m,
+        })
+        setCounts((current) => ({ ...current, candidates: candidates.length }))
+        if (!candidates.length) throw new Error('Bu bölgede uygun mekân bulunamadı. Arama bilgilerini değiştirebilirsiniz.')
       }
-      const payload = await buildScenarioPayload(overrides)
-      ensureUnchangedInputs()
-      setBusy('scenario')
-      const created = await api.createScenario(payload)
-      setScenario(created)
-      setScenarioContext(searchContext)
 
       ensureUnchangedInputs()
-      setBusy('candidates')
-      const candidates = await api.searchCandidates({
-        scenario_id: created.id,
-        max_results: runtimeConfig?.max_candidates || 3,
-        radius_m: scenarioForm.radius_m,
-      })
-      setCounts((current) => ({ ...current, candidates: candidates.length }))
-
-      ensureUnchangedInputs()
+      step = 'routes'
       setBusy('routes')
       const routes = await api.buildRoutes({ scenario_id: created.id, provider: health?.google_configured ? 'google' : 'auto' })
       setCounts((current) => ({ ...current, routes: routes.length }))
@@ -1268,9 +1297,12 @@ export default function App() {
       ensureUnchangedInputs()
       setResponse(result)
       setSelectedId(result.recommendations[0]?.candidate.id || null)
+      setRouteRecovery(null)
     } catch (err) {
+      if (step === 'routes' && created && currentSearchContext.current === searchContext) setRouteRecovery({ scenarioId: created.id, context: searchContext })
       setError(err.message)
     } finally {
+      await refreshRuntimeConfig().catch(() => {})
       pipelineInFlight.current = false
       setBusy('')
     }
@@ -1341,6 +1373,7 @@ export default function App() {
       await api.deleteScenario(scenario.id)
       setScenario(null)
       setScenarioContext(null)
+      setRouteRecovery(null)
       setResponse(null)
       setExperiment(null)
       setCounts({ candidates: 0, routes: 0 })
@@ -1412,14 +1445,14 @@ export default function App() {
           busy={busy}
         />
         <div className="action-row">
-          <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || !canStartSearch}>
+          <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || (!canStartSearch && !canResumeRoutes)}>
             {busy ? <Loader2 size={18} className="spin" /> : <Play size={18} />}
-            {busy ? busyLabels[busy] || 'Çalışıyor' : 'Öneri üret'}
+            {busy ? busyLabels[busy] || 'Çalışıyor' : canResumeRoutes ? 'Rotaları tamamla' : 'Öneri üret'}
           </button>
           {scenario?.session_only && <button className="secondary" onClick={deleteCurrentScenario} disabled={Boolean(busy)} title="Senaryoyu ve konumlarını sil"><Trash2 size={18} /> Senaryoyu sil</button>}
         </div>
         {runtimeConfig?.production && <p className="privacy-note">Senaryolar oluşturulduktan en geç iki saat sonra silinir. Konumlar ve ham tercihler kalıcı veritabanına yazılmaz.</p>}
-        {runtimeConfig && !canStartSearch && <p className="error" role="status">{runtimeConfig.google_unavailable_reason || 'Google kullanımı şu anda kapalı veya bağlantı doğrulanmadı.'}</p>}
+        {runtimeConfig && !canStartSearch && <p className="error" role="status">{selectedCapacity?.reason || runtimeConfig.google_unavailable_reason || 'Google kullanımı şu anda kapalı veya bağlantı doğrulanmadı.'}{canReuseRoutes && ' Mevcut önerilerin tercihlerini güncelleyebilirsiniz.'}</p>}
         <ProgressRail busy={busy} counts={counts} response={response} />
       </section>
 

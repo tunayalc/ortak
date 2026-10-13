@@ -10,7 +10,7 @@ import pytest
 
 from app.config import get_settings
 from app.db import get_conn, init_db
-from app.schemas import PlaceCandidate, ScenarioCreate
+from app.schemas import PlaceCandidate, ScenarioCreate, RouteMetric
 from app.services import google_maps, google_transport, session_store
 from app.services.scenario import create_scenario
 
@@ -156,3 +156,32 @@ def test_retry_limit_stops_network_and_ledger_at_configured_attempt(monkeypatch,
     assert len(requests) == limit
     with get_conn() as conn:
         assert [row["attempt"] for row in conn.execute("SELECT attempt FROM google_api_usage ORDER BY id")] == list(range(1, limit + 1))
+
+
+def test_failed_matrix_resumes_only_missing_pairs_without_rebilling_success(monkeypatch):
+    from app.services import google_usage
+    monkeypatch.setenv("GOOGLE_MAPS_MAX_ATTEMPTS", "1")
+    get_settings.cache_clear()
+    scenario = asyncio.run(create_scenario(ScenarioCreate(synthetic_fixture=True, users=[
+        {"id": "u1", "label": "A", "lat": 39.92, "lng": 32.85},
+        {"id": "u2", "label": "B", "lat": 39.93, "lng": 32.86} ])))
+    places = [candidate().model_copy(update={"id": f"c{i}", "scenario_id": scenario.id}) for i in (1, 2)]
+    session_store.save_candidates(scenario.id, places)
+    calls = []
+    async def route(sid, uid, lat, lng, place, mode, **kwargs):
+        calls.append((uid, place.id))
+        google_usage.reserve_call("routes_compute_routes", 1)
+        if len(calls) == 3:
+            raise RuntimeError("Temporary provider failure")
+        return RouteMetric(id=str(len(calls)), scenario_id=sid, user_id=uid, candidate_id=place.id,
+                           duration_seconds=60, distance_meters=100, provider="google")
+    monkeypatch.setattr(google_maps, "_google_route", route)
+    with pytest.raises(RuntimeError):
+        asyncio.run(google_maps.build_route_matrix(scenario.id, "google"))
+    assert len(session_store.list_routes(scenario.id)) == 2
+    result = asyncio.run(google_maps.build_route_matrix(scenario.id, "google"))
+    assert len(result) == 4
+    assert calls.count(("u1", "c1")) == calls.count(("u1", "c2")) == 1
+    assert google_usage.usage_status()["used_today"] == 5
+    assert len(asyncio.run(google_maps.build_route_matrix(scenario.id, "google"))) == 4
+    assert google_usage.usage_status()["used_today"] == 5

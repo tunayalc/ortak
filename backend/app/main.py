@@ -32,7 +32,7 @@ from .schemas import (
 from .services.experiments import run_experiment
 from .services.google_maps import build_route_matrix, search_candidates
 from .services.google_transport import capture_google_calls
-from .services.google_usage import GoogleUsageBlocked, ensure_capacity, usage_status
+from .services.google_usage import GoogleUsageBlocked, ensure_operation_capacity, search_operations, search_capacity, usage_status
 from .services.location_parser import parse_location_inputs
 from .services.preference_interpreter import PreferenceServiceError, interpret_preferences, llm_status
 from .services.scenario import create_scenario, get_scenario
@@ -101,6 +101,7 @@ def runtime_config(request: Request):
         "google_remaining_requests": usage["remaining_today"],
         "google_service_remaining": usage.get("service_remaining", {}),
         "google_unavailable_reason": usage.get("unavailable_reason", ""),
+        "google_search_capacity": search_capacity(usage),
     }
 
 
@@ -146,7 +147,7 @@ async def post_scenario(payload: ScenarioCreate) -> Scenario:
             session_store.ensure_capacity()
         except ValueError as exc:
             raise HTTPException(429, str(exc)) from exc
-        ensure_capacity(size * settings.public_max_candidates + 2)
+        ensure_operation_capacity(search_operations(size, settings.public_max_candidates, payload.input_mode))
     try:
         if _google_work_lock.locked():
             raise HTTPException(429, "Başka bir konum işlemi sürüyor. Kısa süre sonra yeniden deneyin.")

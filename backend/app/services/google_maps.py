@@ -15,7 +15,7 @@ from ..schemas import PlaceCandidate, RouteMetric
 from .geo import centroid, haversine_m, synthetic_duration_seconds
 from .scenario import get_scenario
 from .google_transport import google_request
-from .google_usage import GoogleUsageBlocked, ensure_capacity
+from .google_usage import GoogleUsageBlocked, ensure_operation_capacity
 from . import session_store
 
 
@@ -189,6 +189,7 @@ async def search_candidates(scenario_id: str, max_results: int, radius_m: int | 
         return candidates
 
     center_lat, center_lng = centroid(scenario.users)
+    ensure_operation_capacity({"places_nearby_new": 1})
     payload = await _google_post(
         GOOGLE_PLACES_URL,
         {
@@ -389,7 +390,7 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
     settings = get_settings()
     candidates = list_candidates(scenario_id)
     if not candidates or (settings.has_google_key and provider in {"google", "auto"} and any(item.provider != "google" for item in candidates)):
-        candidates = await search_candidates(scenario_id, 12, scenario.radius_m)
+        candidates = await search_candidates(scenario_id, settings.public_max_candidates if settings.production else 12, scenario.radius_m)
 
     existing = list_route_metrics(scenario_id)
     expected_pairs = {(user.id, candidate.id) for user in scenario.users for candidate in candidates}
@@ -411,12 +412,18 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
 
     use_google = provider == "google" or (provider == "auto" and settings.has_google_key)
     use_osrm = provider == "osrm" or (provider == "auto" and not settings.has_google_key)
+    reusable = {(metric.user_id, metric.candidate_id): metric for metric in existing
+                if metric.provider == "google" and (metric.user_id, metric.candidate_id) in expected_pairs}
     if use_google:
-        ensure_capacity(len(expected_pairs))
+        ensure_operation_capacity({"routes_compute_routes": len(expected_pairs - reusable.keys())})
     metrics: list[RouteMetric] = []
     for user in scenario.users:
         for candidate in candidates:
             if use_google:
+                saved = reusable.get((user.id, candidate.id))
+                if saved is not None:
+                    metrics.append(saved)
+                    continue
                 try:
                     metric = await _google_route(
                         scenario_id,

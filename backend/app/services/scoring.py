@@ -3,6 +3,7 @@ from __future__ import annotations
 import statistics
 import uuid
 
+from ..config import get_settings
 from ..db import dump_json, get_conn
 from ..schemas import (
     Coordinate,
@@ -373,6 +374,11 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         raise ValueError("Aday mekân bulunamadı. Önce /candidates/search uç noktası çalıştırılmalıdır.")
     if not metrics:
         raise ValueError("Rota matrisi bulunamadı. Önce /routes/matrix uç noktası çalıştırılmalıdır.")
+    if get_settings().production:
+        expected = {(user.id, candidate.id) for user in scenario.users for candidate in candidates}
+        actual = {(metric.user_id, metric.candidate_id) for metric in metrics if metric.provider == "google"}
+        if actual != expected:
+            raise ValueError("Rota matrisi eksik. Öneri için tüm kişi ve mekân rotalarını tamamlayın.")
 
     by_candidate: dict[str, list] = {candidate.id: [] for candidate in candidates}
     for metric in metrics:

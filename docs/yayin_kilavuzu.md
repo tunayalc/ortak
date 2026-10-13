@@ -6,18 +6,18 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 152/152 başarılı; kullanım kaydı birleştirme ve servis bazlı kota kontrolü de test edildi |
+| Backend testleri | 161/161 başarılı; kullanım kaydı birleştirme, servis bazlı kota ve sınırlı yeniden deneme kontrolü test edildi |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| GitHub Actions ve ARM64 imajları | [İş akışı 38473305438](https://github.com/tunayalc/ortak/actions/runs/38473305438) başarılı: test, API ve web ARM64 imaj işleri geçti |
+| GitHub Actions ve ARM64 imajları | [İş akışı 38480273613](https://github.com/tunayalc/ortak/actions/runs/38480273613) başarılı: test, API ve web ARM64 imaj işleri geçti |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
-| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `54037e3` commit'i ve doğrulanmış yeni API imajı çalışıyor |
+| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `a66eabd` commit'i ve doğrulanmış yeni API imajı çalışıyor |
 | Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'deki eski `ortak-beta` ve 50 GB boot diski sonlandırıldı. Yalnızca `ortak-beta-yeni` 2 OCPU/12 GB ve yaklaşık 47 GB boot diskiyle çalışıyor. Kısa süreli sunucu örtüşmesinin deneme kredisi kullanımına etkisi fatura ekranından ayrıca kontrol edilmeli |
 | Dış HTTPS | [Yeni sunucu](https://92.5.80.85.nip.io/) ve `/api/health` dışarıdan HTTPS 200 döndü; sertifika doğrulaması başarılı. On eşzamanlı `/api/readyz` isteği 200 döndü; API ve Ollama portları dışarıdan erişilemedi |
 | Sunucuda Llama 3 8B | İlk soğuk deney 35/36 idi: ilk istek 120,136 saniye. Başarısız rapor ayrı saklandı. Açılış yüklemesinden sonraki gerçek deney 36/36 geçti; en yavaş yanıt 51,756 saniye ve üç konteynerde OOM yok |
 | Canlı tarayıcıda Llama önizlemesi | “Mekân puanı daha önemli olsun, kişiler dengeli kalsın” isteği 70/33/33 kriter ve 1/1/1 kişi ağırlığı önerdi. Önizleme uygulanmadan kapatıldı; Google çağrısı yapılmadı |
-| Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Sağlık kontrolü geçti; ayrı SQLite yedeğinde bütünlük ve 11 satırlık kullanım kaydının guard ile eşleşmesi doğrulandı |
-| Google ve 24 saat gözlem | Yerel, korumalı pilot gerçek Google ile geçti: 1 Geocoding, 1 Places, 9 Routes; üç kişi ve üç aday için rota matrisi tam. Oracle'da yalnızca `92.5.80.85/32` ve üç API ile sınırlandırılmış ayrı anahtar kuruldu. Yerel pilotun 22 kullanım kaydı sunucuya guard doğrulamasıyla taşındı; çağrılar hâlâ kapalı. Sunucu pilotu, genel öneri akışı ve 24 saatlik gözlem tamamlanmadı |
+| Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Sağlık kontrolü geçti; Oracle pilotu sonrası ayrı SQLite yedeğinden 33 kullanım kaydı geri okunarak bütünlük ve guard eşleşmesi doğrulandı |
+| Google ve 24 saat gözlem | Yerel pilot ve ayrı Oracle pilotu gerçek Llama/Google ile 13/13 kontrolü geçti; her biri 1 Geocoding, 1 Places ve 9 Routes isteği yaptı. Oracle pilotu sunucudaki geçici backend'e SSH tüneli üzerinden çalıştırıldı. Ortak kullanım kaydı 33 satır ve ihtiyatlı toplam rezerv 58,05 TL. Genel ücretli öneri kullanımı ve 24 saatlik nihai gözlem henüz tamamlanmadı |
 
 14 Ekim'de kullanıcı, önceki 10.00 bekleme koşulunu açıkça değiştirerek yerel pilotun hemen başlatılmasını istedi. Onaylı 100 TL sınırıyla 11 gerçek Google isteği yapıldı; yeniden deneme olmadı. Bu, genel doğruluk veya Google faturası hakkında kesin bir iddia değildir. Ücretli sunucu, ödeme işlemi veya ikinci Google pilotu başlatılmadı.
 
@@ -25,7 +25,9 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 Oracle pilotunu mevcut kotayla çalıştırmak için `GOOGLE_MAPS_MAX_ATTEMPTS=2` kullanılabilir. Bu ayar her Google isteğini en fazla iki denemeyle sınırlar; pilotun en kötü durumda 22 deneme ve 2 Geocoding / 2 Places / 18 Routes hakkı gerekir. İhtiyatlı azami rezerv 23,40 TL'dir. Varsayılan üç denemede 33 ve 3/3/27 gereksinimi korunur. Günlük kota, bütçe ve kullanım kaydı değişmez; test ön kontrolü gerçek backend tekrar sınırını kullanır.
 
-Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yerel pilot 14 Ekim'de tamamlandı. Kullanıcı, bunun ardından Oracle'da ayrı ve yine en fazla 100 TL'lik ikinci bir pilotu da onayladı; bu ikinci pilot henüz çalıştırılmadı. Yerel sonuç Oracle sunucu kabulü değildir.
+Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yerel pilot 14 Ekim'de tamamlandı. Kullanıcı, bunun ardından Oracle'da ayrı ve yine en fazla 100 TL'lik ikinci bir pilotu da onayladı; bu pilot da gerçek sunucu modeli ve Google servisleriyle tamamlandı. Yerel sonuç Oracle sunucu kabulü yerine kullanılmadı.
+
+Oracle pilotunda yeniden deneme sınırı ikiye düşürüldü; mevcut 22 deneme ve 2/2/18 servis hakkı yeterliydi. Gerçekte yalnızca 11 Google isteği gönderildi, yeniden deneme olmadı ve 13/13 kontrol geçti. Oracle Llama yanıtı 23,547 saniyede beklenen kriter ve kişi ağırlıklarını verdi. Pilotun ihtiyatlı rezervi 11,70 TL; bu değer Google faturası değildir. Kriter/kişi değişiklikleri yeni rota çağrısı üretmedi. Özel rapor `output/google_maps/oracle-approved-20261014/` dizininde tutulur. Geçici sunucu süreci ve SSH tüneli kapatıldı. Yerel ve sunucu kullanım kayıtları 33 satırla uzlaştırıldı; iki guard doğrulandı. Gerçek konum/Google içerik tablolarında kalıcı kayıt yok. Genel ücretli kullanımı açmak, önceki pilot onayının dışındaki ayrı kapsamdır.
 
 14 Ekim çalışması öncesinde yeniden doğrulanan [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing): Geocoding 0,005 USD, Nearby Search Enterprise 0,035 USD, trafik verili Compute Routes Pro 0,010 USD/istek. Üç kurgusal kişi ve üç aday için 11 normal çağrı 0,13 USD, tüm istekler iki kez yeniden denenirse 33 deneme 0,39 USD eder. [Google Türkiye KDV oranı %20'dir](https://docs.cloud.google.com/billing/docs/resources/vat-overview). [TCMB'nin 13 Ekim bülteni](https://www.tcmb.gov.tr/kurlar/today.xml) USD döviz satışını 49,3681 TL gösterdi. Bu TCMB değeri Google'ın fatura kuru değildir.
 
@@ -40,7 +42,7 @@ cd backend
 .venv-release/bin/python scripts/evaluate_google_maps.py --api-base http://127.0.0.1:8012 --live --with-llama --max-spend-tl 100
 ```
 
-Bu komut yalnızca son onay, yeterli kota ve korumalı geçici backend hazırken çalıştırılır. 14 Ekim pilotunda gerçek Llama'nın `2x/1x/1x` kişi ve puan/fiyat/yakınlık tercihi Google aramasından önce doğrulandı. Üç kişi x üç aday için tam dokuz Google rotası alındı. Profil ve kişi tercihi değişiklikleri ek çağrı üretmedi; 13/13 kontrol geçti. Test raporu GitHub dışındaki `output/google_maps/local-approved-20261014-early/` dizinindedir. Ham tercih, koordinat ve Google içerikleri kaydedilmez. Toplam kullanım kaydı 22 satırdır ve guard ile eşleşir; 46,35 TL tüm kayıtlar için ayrılmış ihtiyatlı maliyettir, fatura tutarı değildir. Oracle pilotu ayrı onaylanmıştır ancak servis kotası ve ortak kullanım kaydı yeterli olmadan başlatılmaz.
+Bu komut yalnızca son onay, yeterli kota ve korumalı geçici backend hazırken çalıştırılır. 14 Ekim yerel pilotunda gerçek Llama'nın `2x/1x/1x` kişi ve puan/fiyat/yakınlık tercihi Google aramasından önce doğrulandı. Üç kişi x üç aday için tam dokuz Google rotası alındı. Profil ve kişi tercihi değişiklikleri ek çağrı üretmedi; 13/13 kontrol geçti. Test raporu GitHub dışındaki `output/google_maps/local-approved-20261014-early/` dizinindedir. Ham tercih, koordinat ve Google içerikleri kaydedilmez. Yerel pilot sonrası toplam kullanım kaydı 22 satır ve rezerv 46,35 TL idi; ayrı Oracle pilotu sonrası toplam 33 satır ve 58,05 TL oldu. Bunlar ihtiyatlı rezervlerdir; fatura tutarı değildir. Başka bir pilot mevcut kayıt uzlaştırılmadan ve ayrı kapsam belirlenmeden tekrarlanmaz.
 
 ## Tercihten konuma dayalı aramaya geçiş
 

@@ -54,6 +54,9 @@ services:
       OLLAMA_MAX_QUEUE: "1"
       OLLAMA_CONTEXT_LENGTH: "2048"
       OLLAMA_KEEP_ALIVE: 5m
+      OLLAMA_NO_CLOUD: "true"
+      OLLAMA_NOHISTORY: "true"
+      OLLAMA_DEBUG_LOG_REQUESTS: "false"
     volumes: ["ollama_models:/root/.ollama"]
     networks: [model, egress]
     restart: unless-stopped

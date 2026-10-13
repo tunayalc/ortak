@@ -51,13 +51,17 @@ def save_json(path, payload):
 def apply():
     config = configuration()
     release_file = ROOT / "private/release.json"
+    images = {service: config["services"][service]["image"] for service in ("api", "web", "ollama")}
     if release_file.exists():
         previous = json.loads(release_file.read_text())
+        if previous["images"] == images:
+            compose("up", "-d", "--wait", "--wait-timeout", "180")
+            return
         save_json(ROOT / "private/previous-release.json", previous)
     compose("pull")
     compose("up", "-d", "--wait", "--wait-timeout", "180")
     save_json(release_file, {"recorded_at": datetime.now(timezone.utc).isoformat(),
-                            "images": {service: config["services"][service]["image"] for service in ("api", "web", "ollama")}})
+                            "images": images})
 
 
 def rollback():

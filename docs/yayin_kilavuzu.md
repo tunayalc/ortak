@@ -2,6 +2,21 @@
 
 ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışacak kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi, sunucu kabulünün tamamlandığı anlamına gelmez.
 
+## 13 Ekim 2026 Durumu
+
+| Kontrol | Durum |
+| --- | --- |
+| Backend testleri | 124/124 başarılı |
+| Mobil ve masaüstü arayüz testleri | 14/14 başarılı; 390 ve 1440 piksel, açık/koyu tema |
+| Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
+| Yerel ARM64 API ve web imajları | Derlendi; Caddy ve Compose yapılandırması doğrulandı |
+| Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
+| GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
+| Oracle hesabı ve ücretsiz kapasite | Konsol erişimi doğrulanmadı; kaynak oluşturulmadı |
+| Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
+
+Bu turda yeni Google çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
+
 ## Ücretsiz kaynak ve erişim
 
 Ana bölge Frankfurt olacak. Yalnızca konsolda Always Free uygunluğu ve hesap genelindeki kullanılabilir kotası doğrulanan 2 OCPU, 12 GB bellek, 50 GB boot disk kullanılacak. Ücretli yükseltme, yük dengeleyici, NAT Gateway veya alan adı alınmayacak. Kapasite yetersizliğinde oluşturma en sık saatte bir denenecek. [Oracle sınırları](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)

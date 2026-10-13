@@ -54,6 +54,8 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a SESSION_SECRET of at least 32 characters.")
             if self.llm_provider != "ollama":
                 raise ValueError("This release requires the explicitly selected Ollama provider.")
+            if self.ollama_model != "llama3:8b":
+                raise ValueError("This release requires llama3:8b; automatic model substitution is not allowed.")
             if self.google_budget_limit_tl > 1200:
                 raise ValueError("The authorized release reserve cannot exceed 1200 TL.")
             if self.public_max_participants > 8 or self.public_max_candidates > 3 or self.public_max_k > 3:

@@ -56,6 +56,8 @@ class DeploymentState:
                 raise ValueError("İş zaten başlatılmış veya tamamlanmış; sonucu uzlaştırmadan yeniden başlatmayın.")
             if any(state["stages"][dependency]["status"] != "passed" for dependency in DEPENDENCIES.get(name, ())):
                 raise ValueError("Ön koşullar henüz tamamlanmadı.")
+            if name == "google_pilot" and stage["attempts"] >= 1:
+                raise ValueError("Pilot bir kez başlatıldı; yeni bir canlı çalışma ayrı harcama onayı gerektirir.")
             if name == "free_capacity" and stage.get("last_attempt"):
                 if (utcnow() - datetime.fromisoformat(stage["last_attempt"])).total_seconds() < 3600:
                     raise ValueError("Ücretsiz kapasite denemeleri arasında en az bir saat olmalı.")

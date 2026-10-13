@@ -6,14 +6,16 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 142/142 başarılı; yerel pilot bütçe koruması, model ön kontrolü, özel ledger aktarımı, kullanım guard'ının paylaşım dışı tutulması ve konteynerde pilot CLI açılışı doğrulandı |
+| Backend testleri | 145/145 başarılı; model açılış yüklemesi ve otomatik indirmeyi engelleme testleri eklendi |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| GitHub Actions ve ARM64 imajları | [İş akışı 38414797398](https://github.com/tunayalc/ortak/actions/runs/38414797398) başarılı: test, API ve web imaj işleri geçti. İki ARM64 imajı digest ile doğrulandı ve anonim GHCR erişiminde HTTP 200 döndü. Sunucu kabulü ayrıca yapılacak |
+| GitHub Actions ve ARM64 imajları | [İş akışı 38420101066](https://github.com/tunayalc/ortak/actions/runs/38420101066) başarılı: test, API ve web imaj işleri geçti. Yeni açılış yüklemesi değişikliği henüz bu iş akışında sınanmadı |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
-| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; `04d368c` commit'i `main` dalına gönderildi |
-| Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'de kullanıcı tarafından oluşturulan `ortak-beta` çalışıyor: 2 OCPU, 12 GB RAM, 50 GB boot disk. Konsolda CPU/bellek kullanımı 2/12, ücretsiz disk kotası 200 GB içinden kullanım 50 GB görüldü. Geçici genel IPv4 atandı; uygulamanın HTTPS üzerinden çalışması henüz doğrulanmadı |
-| Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
+| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; sunucuda `5e5a66e` commit'i çalışıyor |
+| Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'deki eski `ortak-beta` durduruldu; yeni `ortak-beta-yeni` 2 OCPU/12 GB ile çalışıyor. İki makine aynı anda çalıştırılmıyor. Yaklaşık 97 GB toplam boot diski, 200 GB ücretsiz disk tahsisi içinde. Kısa süreli örtüşmenin deneme kredisi kullanımına etkisi fatura ekranından ayrıca kontrol edilmeli |
+| Dış HTTPS | [Yeni sunucu](https://92.5.80.85.nip.io/) ve `/api/health` dışarıdan HTTPS 200 döndü. Bu, gerçek Google öneri akışının kabulü değildir |
+| Sunucuda Llama 3 8B | İlk gerçek 36 isteklik deney 35/36: modelin ilk yüklenmesi 120,136 saniye sürerek 120 saniyelik sınırı aştı; kalan 35 isteğin tamamı geçti. Başarısız rapor korunacak ve açılış yüklemesinden sonra deney yeniden yapılacak |
+| Google, kurtarma ve 24 saat gözlem | Google çağrıları kapalı; tam öneri akışı, kurtarma ve 24 saatlik gözlem tamamlanmadı |
 
 Bu turda yeni ücretli Google Maps API çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
 
@@ -52,7 +54,7 @@ Ana bölge Frankfurt olacak. Yalnızca konsolda Always Free uygunluğu ve hesap 
 
 Dağıtım için ayrı bir SSH anahtarı özel dizinde üretildi; yalnızca açık anahtar Oracle'a verilebilir. Kullanıcının yapıştırdığı açık anahtar, yereldeki anahtarın SHA-256 özetiyle karşılaştırılarak doğrulandı. Özel anahtar gönderilmedi ve yeni tarayıcı dosya erişim yetkisi açılmadı. Aynı SSH anahtarı yeniden kullanılmalı; anahtar üretimi otomatik tekrarlanmamalı.
 
-İlk AD-3 kapasite hatasının ardından AD-1'deki mevcut sunucu doğrulandı; yeni bir kopyası oluşturulmaz. `ortak-vcn` içindeki alt ağ genel alt ağdır; internet ağ geçidi ve `0.0.0.0/0` yönlendirmesi vardır. Kullanıcının ağ erişimine verdiği onayın ardından Oracle güvenlik listesinde SSH yalnızca yönetici `/32` adresine daraltıldı, TCP 80/443 açıldı ve mevcut ağ kartına geçici genel IPv4 atandı. Sunucu güvenlik duvarı aynı erişim sınırlarıyla kalıcılaştırıldı; 8000 ve 11434 dışarı açılmadı.
+İlk AD-3 kapasite hatasından sonra AD-1'de `ortak-beta` kurulmuştu. Sunucu içindeki eski yönetici IP kuralı nedeniyle SSH erişimi kesilince ve onarım yolu sonuç vermeyince kullanıcı talebiyle aynı bölgede `ortak-beta-yeni` oluşturuldu. Resmî ücretsiz A1 tahsisi iki makineye ayrı ayrı değil, hesap genelinde toplam 2 OCPU/12 GB'dır; bu nedenle eski makine durduruldu. Eski disk, yeni kurulum doğrulanana kadar korunur. `ortak-vcn` içindeki alt ağ genel alt ağdır; internet ağ geçidi ve `0.0.0.0/0` yönlendirmesi vardır. Yeni makinenin SSH kuralı yalnızca güncel yönetici `/32` adresine, TCP 80/443 web erişimine açıktır; 8000 ve 11434 dışarı açılmadı.
 
 Maliyet penceresinde boot disk için aylık 1,98 EUR liste tahmini görüldü; pencere hesap kotasının ücretsiz tahsisini doğrulayan bir fatura değildir. [Resmî Always Free kapsamı](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm), ana bölgede toplam 200 GB boot/blok disk ve aylık 1.500 OCPU-saat / 9.000 GB-saat içerir. Her gerçek oluşturma isteğinden önce hesap genelindeki boş kota ve ücretsiz uygunluk yeniden kontrol edilir. Uygunluk belirsizse oluşturma yapılmaz; deneme kredileri ücretli kaynak açma izni değildir.
 
@@ -98,11 +100,12 @@ Google başlangıçta kapalıdır. Pilot için vergi ve kur dâhil ihtiyatlı bi
 
 ```bash
 python3 operations.py apply
-docker compose exec ollama ollama pull llama3:8b
+docker compose exec ollama ollama list
+sudo python3 operations.py warmup
 docker compose exec api python scripts/evaluate_preferences.py --repeats 3 --output /backups/llama-acceptance.json
 ```
 
-Model indirme bir kez yapılır; başka modele veya buluta otomatik geçiş yoktur. Sunucuda 36/36 kontrol, her istekte en fazla 120 saniye ve bellek taşması olmaması gerekir. Model mevcut diye anlamsal doğruluk kabul edilmez. Manuel kontroller model kesintisinde kullanılabilir.
+`warmup` yalnızca kurulu `llama3:8b` modelini belleğe yükler; eksik modeli otomatik indirmez. `OLLAMA_KEEP_ALIVE=-1` modelin bellekte kalmasını sağlar. Açılış için `ortak-model-warmup.service` kurulur; model sunucuda zaten kurulu değilse operatör kontrollü tek indirme ayrıca yapılır. İlk soğuk denemedeki 35/36 raporu silinmez. Kabul için yeni deneyde 36/36 kontrol, her istekte en fazla 120 saniye ve bellek taşması olmaması gerekir. Model mevcut diye anlamsal doğruluk kabul edilmez. Manuel kontroller model kesintisinde kullanılabilir.
 
 Google pilotundan önce kullanıcıya maliyet tahmini sunulur ve tek onay alınır. Günlük ve servis kotaları yeniden denemeler için yeterli olmalı; yetersizse sonraki gün beklenir. Tam üç kişi × üç aday rota matrisi, Google kaynağı ve kriter katkıları doğrulanır. Profil değişikliği yeni rota çağrısı yapmamalıdır. Test bittikten sonra Google yeniden kapatılır; genel kullanıma açma ayrı bütçe kapsamıyla yapılır.
 
@@ -118,7 +121,7 @@ Bu komut bütçeyi kendi başına etkinleştirmez; sunucu rezervasyonu ve ayrıc
 ```bash
 sudo install -m 644 systemd/ortak-*.service systemd/ortak-*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now ortak-health.timer ortak-backup.timer
+sudo systemctl enable --now ortak-model-warmup.service ortak-health.timer ortak-backup.timer
 ```
 
 Sağlık kontrolü beş dakikada bir HTTPS, SQLite, model listesi, disk ve konteyner durumunu okur; ücretli Google çağrısı veya model üretimi yapmaz. Ham tercih, konum, IP, model yanıtı ve sorgu parametreleri günlüğe yazılmaz. 24 saatlik gözlemde başarısız kontrol veya on dakikayı aşan boşluk gözlem süresini yeniden başlatır. API çökünce oturumluk konumlar kaybolur.

@@ -1,0 +1,18 @@
+[Unit]
+Description=ORTAK preload installed Llama model after boot
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+StartLimitIntervalSec=10min
+StartLimitBurst=5
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ortak/deploy
+ExecStart=/usr/bin/python3 /opt/ortak/deploy/operations.py warmup
+TimeoutStartSec=300
+Restart=on-failure
+RestartSec=30s
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

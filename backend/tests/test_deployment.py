@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlite3
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -22,6 +23,39 @@ from test_public_release import production
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from deploy import operations
+
+
+def test_warmup_requires_installed_model_and_confirms_loaded(monkeypatch):
+    monkeypatch.setattr(operations, "configuration", lambda: {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}})
+    calls = []
+
+    def compose(*args, **kwargs):
+        calls.append((args, kwargs))
+        if args[-1] == "list":
+            return SimpleNamespace(stdout="NAME ID\nllama3:8b abc\n")
+        if args[-1] == "ps":
+            return SimpleNamespace(stdout="NAME ID\nllama3:8b abc\n")
+        return SimpleNamespace(stdout="")
+
+    monkeypatch.setattr(operations, "compose", compose)
+    operations.warmup()
+    assert [args[-1] for args, _ in calls] == ["list", "", "ps"]
+    assert calls[1][0][-2:] == ("llama3:8b", "")
+    assert calls[1][1]["timeout"] == 240
+
+
+def test_warmup_never_pulls_missing_model(monkeypatch):
+    monkeypatch.setattr(operations, "configuration", lambda: {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}})
+    calls = []
+
+    def compose(*args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(stdout="NAME ID\n")
+
+    monkeypatch.setattr(operations, "compose", compose)
+    with pytest.raises(ValueError, match="otomatik indirme"):
+        operations.warmup()
+    assert len(calls) == 1 and calls[0][-1] == "list"
 
 
 def test_public_proxy_and_api_have_distinct_static_ips():

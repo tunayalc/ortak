@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parent
 IMAGE = re.compile(r"^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$")
 
 
-def compose(*args, check=True):
-    return subprocess.run(["docker", "compose", "--project-directory", str(ROOT), "-f", str(ROOT / "compose.yaml"), *args], check=check, capture_output=True, text=True)
+def compose(*args, check=True, timeout=None):
+    return subprocess.run(["docker", "compose", "--project-directory", str(ROOT), "-f", str(ROOT / "compose.yaml"), *args], check=check, capture_output=True, text=True, timeout=timeout)
 
 
 def configuration():
@@ -73,6 +73,20 @@ def rollback():
     args = ["-f", str(override)]
     compose(*args, "up", "-d", "--wait", "--wait-timeout", "180")
     save_json(ROOT / "private/release.json", previous)
+
+
+def warmup():
+    model = configuration()["services"]["api"]["environment"]["OLLAMA_MODEL"]
+    if model != "llama3:8b":
+        raise ValueError("Yalnızca onaylanan llama3:8b modeli yüklenebilir.")
+    available = compose("exec", "-T", "ollama", "ollama", "list").stdout.splitlines()
+    if model not in {line.split()[0] for line in available[1:] if line.split()}:
+        raise ValueError("Model kurulu değil; otomatik indirme yapılmadı.")
+    compose("exec", "-T", "ollama", "ollama", "run", model, "", timeout=240)
+    loaded = compose("exec", "-T", "ollama", "ollama", "ps").stdout.splitlines()
+    if model not in {line.split()[0] for line in loaded[1:] if line.split()}:
+        raise ValueError("Model belleğe yüklenemedi.")
+    print("Local model preloaded; no model download or Google call was made.")
 
 
 def import_ledger(source: Path):
@@ -135,7 +149,7 @@ def health():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("verify", "apply", "rollback", "health", "backup", "import-ledger"))
+    parser.add_argument("command", choices=("verify", "apply", "rollback", "warmup", "health", "backup", "import-ledger"))
     parser.add_argument("--ledger", type=Path, help="Private ledger-only export to merge before enabling Google")
     args = parser.parse_args()
     try:
@@ -146,6 +160,8 @@ if __name__ == "__main__":
             apply()
         elif args.command == "rollback":
             rollback()
+        elif args.command == "warmup":
+            warmup()
         elif args.command == "backup":
             compose("exec", "-T", "api", "python", "scripts/backup_database.py", "backup")
         elif args.command == "import-ledger":
@@ -155,6 +171,6 @@ if __name__ == "__main__":
             print("Ledger merged; temporary transfer removed and original export preserved.")
         else:
             raise SystemExit(0 if health() else 1)
-    except (OSError, ValueError, KeyError, subprocess.CalledProcessError):
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
         # Subprocess output may contain rendered configuration; never echo it.
         parser.exit(1, "Operation failed. Inspect the private server state; secrets were not printed.\n")

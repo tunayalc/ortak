@@ -21,7 +21,7 @@ services:
   api:
     image: ${ORTAK_API_IMAGE:?Set a tested API image digest}
     platform: linux/arm64
-    env_file: .env
+    env_file: ${ORTAK_ENV_FILE:-.env}
     environment:
       DATABASE_URL: sqlite:////data/ortak.db
       OLLAMA_BASE_URL: http://ollama:11434

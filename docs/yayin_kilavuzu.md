@@ -14,7 +14,7 @@ Testleri geçen commit `/opt/ortak` içine alınır. Docker ve Compose resmî Do
 
 ```bash
 cd /opt/ortak/deploy
-install -d -m 700 -o 10001 -g 10001 data guard backups
+sudo install -d -m 700 -o 10001 -g 10001 data guard backups
 install -d -m 700 private
 python3 operations.py verify
 ```

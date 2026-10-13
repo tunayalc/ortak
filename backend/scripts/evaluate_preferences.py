@@ -6,6 +6,7 @@ import asyncio
 import json
 import sys
 import time
+import platform
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -85,11 +86,14 @@ async def evaluate(repeats):
             except Exception as exc:
                 entry.update(passed=False, error=str(exc))
             entry["seconds"] = round(time.perf_counter() - started, 3)
+            entry["within_120_seconds"] = entry["seconds"] <= 120
+            entry["passed"] = entry["passed"] and entry["within_120_seconds"]
             results.append(entry)
             print(json.dumps(entry, ensure_ascii=False), flush=True)
     return {
         "recorded_at": datetime.now(timezone.utc).isoformat(),
         "provider": settings.llm_provider,
+        "runner_platform": platform.platform(),
         "model": settings.ollama_model,
         "ollama": version,
         "model_details": next(item for item in models if item["name"] == settings.ollama_model),
@@ -104,8 +108,14 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repeats", type=int, choices=range(1, 6), default=1)
     args = parser.parse_args()
-    report = asyncio.run(evaluate(args.repeats))
+    try:
+        report = asyncio.run(evaluate(args.repeats))
+        report["status"] = "passed" if report["passed"] == report["total"] else "failed"
+    except (RuntimeError, httpx.HTTPError, ValueError, KeyError) as exc:
+        report = {"recorded_at": datetime.now(timezone.utc).isoformat(), "status": "blocked", "provider": "ollama",
+                  "model": get_settings().ollama_model, "passed": 0, "total": len(CASES) * args.repeats, "results": [],
+                  "reason": str(exc) if isinstance(exc, RuntimeError) else "Model bağlantısı veya yanıtı doğrulanamadı."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Passed: {report['passed']}/{report['total']}")
-    sys.exit(0 if report["passed"] == report["total"] else 1)
+    sys.exit(0 if report["status"] == "passed" else 1)

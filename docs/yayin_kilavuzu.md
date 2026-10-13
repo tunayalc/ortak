@@ -12,7 +12,7 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 | Yerel ARM64 API ve web imajları | Güncel API ve web imajları derlendi; üretim açılışı, bütçe koruması, pilot CLI, Caddy, `/api` bağlantısı ve özel dosya yokluğu doğrulandı. GitHub Actions / GHCR kabulü bekliyor; yerel kontrol canlı yayın değildir |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
 | GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
-| Oracle hesabı ve ücretsiz kapasite | Konsol erişimi doğrulanmadı; kaynak oluşturulmadı |
+| Oracle hesabı ve ücretsiz kapasite | Konsol girişi ve Frankfurt ana bölgesi doğrulandı. Ampere kullanımı 0; ücretsiz disk kotası 200 GB, kullanım 0. A1 formunda 2 OCPU / 12 GB RAM ve ücretsiz ARM64 Ubuntu seçildi; sunucu henüz oluşturulmadı |
 | Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
 
 Bu turda yeni ücretli Google Maps API çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
@@ -47,6 +47,8 @@ Bu akışın arayüz testleri kurgusal model önerileri ve Google kullanılmayan
 ## Ücretsiz kaynak ve erişim
 
 Ana bölge Frankfurt olacak. Yalnızca konsolda Always Free uygunluğu ve hesap genelindeki kullanılabilir kotası doğrulanan 2 OCPU, 12 GB bellek, 50 GB boot disk kullanılacak. Ücretli yükseltme, yük dengeleyici, NAT Gateway veya alan adı alınmayacak. Kapasite yetersizliğinde oluşturma en sık saatte bir denenecek. [Oracle sınırları](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
+
+13 Ekim'de yetkili konsolda Frankfurt ana bölgesi ve Free Tier hesap doğrulandı. Bölgesel Ampere işlemci ve bellek kullanımı sıfır, ücretsiz boot/blok disk kotası 200 GB ve kullanım sıfır görüldü. Deneme hesabının daha geniş servis limiti ücretsiz kullanım izni değildir. Resmî Always Free belgesindeki aylık 1.500 OCPU-saat ve 9.000 GB-saat sınırları korunur. `VM.Standard.A1.Flex` için 2 OCPU ve 12 GB, ücretsiz `Canonical Ubuntu 24.04 Minimal aarch64` imajı formda seçildi. Ağ, yönetici IP'sine sınırlı SSH, 50 GB disk ve son maliyet kontrolü tamamlanmadığından oluşturma isteği gönderilmedi. Formun açılması fiziksel sunucu kapasitesi bulunduğunu kanıtlamaz.
 
 Ubuntu ARM64 sunucusunda SSH yalnızca yönetici IP'sine `/32` ile açılır. HTTP 80 ve HTTPS 443 uygulama yayını için kullanılır; FastAPI 8000 ve Ollama 11434 dışarıya açılmaz. Oracle güvenlik listesi ve sunucu güvenlik duvarı birlikte doğrulanır. Parola ve banka doğrulamalarını kullanıcı tamamlar; yeni sözleşme veya erişim yetkileri ilgili aşamada onaylanır.
 

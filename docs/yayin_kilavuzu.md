@@ -50,6 +50,8 @@ Ana bölge Frankfurt olacak. Yalnızca konsolda Always Free uygunluğu ve hesap 
 
 13 Ekim'de yetkili konsolda Frankfurt ana bölgesi ve Free Tier hesap doğrulandı. Bölgesel Ampere işlemci ve bellek kullanımı sıfır, ücretsiz boot/blok disk kotası 200 GB ve kullanım sıfır görüldü. Deneme hesabının daha geniş servis limiti ücretsiz kullanım izni değildir. Resmî Always Free belgesindeki aylık 1.500 OCPU-saat ve 9.000 GB-saat sınırları korunur. `VM.Standard.A1.Flex` için 2 OCPU ve 12 GB, ücretsiz `Canonical Ubuntu 24.04 Minimal aarch64` imajı formda seçildi. Ağ, yönetici IP'sine sınırlı SSH, 50 GB disk ve son maliyet kontrolü tamamlanmadığından oluşturma isteği gönderilmedi. Formun açılması fiziksel sunucu kapasitesi bulunduğunu kanıtlamaz.
 
+Sunucu formu ağ adımına ilerletildi; yeni ağ ve alt ağ adları hazırlandı. Dağıtım için ayrı bir SSH anahtarı özel dizinde üretildi; yalnızca açık anahtar Oracle'a verilebilir. Tarayıcı dosya yüklemesi mevcut izinlerle çalışmadı; yeni dosya erişim yetkisi açılmadı. Açık anahtarın forma girilmesi kullanıcı adımı olarak bekliyor. Genel IP ve IPv6 ilk oluşturma sırasında kapalı tutulacak; ağ güvenlik kuralları doğrulanmadan dış erişim açılmayacak. Açık anahtar, 50 GB disk ve son maliyet kontrolü tamamlanmadan sunucu oluşturulmaz. Aynı SSH anahtarı yeniden kullanılmalı; anahtar üretimi ve kapasite denemesi otomatik tekrarlanmamalı.
+
 Ubuntu ARM64 sunucusunda SSH yalnızca yönetici IP'sine `/32` ile açılır. HTTP 80 ve HTTPS 443 uygulama yayını için kullanılır; FastAPI 8000 ve Ollama 11434 dışarıya açılmaz. Oracle güvenlik listesi ve sunucu güvenlik duvarı birlikte doğrulanır. Parola ve banka doğrulamalarını kullanıcı tamamlar; yeni sözleşme veya erişim yetkileri ilgili aşamada onaylanır.
 
 ## Üretim kurulumu

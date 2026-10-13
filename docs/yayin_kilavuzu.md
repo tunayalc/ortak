@@ -6,20 +6,45 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 161/161 başarılı; kullanım kaydı birleştirme, servis bazlı kota ve sınırlı yeniden deneme kontrolü test edildi |
-| Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
+| Backend testleri | 167/167 başarılı; servis fiyatlarıyla ön hesap, çözümlenmiş konumun yeniden ücretlendirilmemesi, eksik rota tamamlaması ve tam matris zorunluluğu test edildi |
+| Mobil ve masaüstü arayüz testleri | 34/34 başarılı; 390 ve 1440 piksel, açık/koyu tema, klavye odağı, kota yenileme, koordinat aktarımı ve kesilen rota akışı sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| GitHub Actions ve ARM64 imajları | [İş akışı 38480273613](https://github.com/tunayalc/ortak/actions/runs/38480273613) başarılı: test, API ve web ARM64 imaj işleri geçti |
+| GitHub Actions ve ARM64 imajları | Canlı kabulün çalıştığı `2ed0711` için [iş akışı 38484704103](https://github.com/tunayalc/ortak/actions/runs/38484704103) başarılı. Klavye testini düzelten `8f8f34f` için de [iş akışı 38485538601](https://github.com/tunayalc/ortak/actions/runs/38485538601) başarılı: 167 backend, 34 arayüz testi ve iki ARM64 imajı geçti |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
-| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `a66eabd` commit'i ve doğrulanmış yeni API imajı çalışıyor |
+| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; `2ed0711` uygulama sürümü gerçek üretim tarayıcısında sınandı. Sunucuda son `8f8f34f` CI imajları çalışıyor; bu sürüm yalnızca test araçlarını değiştiriyor, uygulama kodu aynı |
 | Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'deki eski `ortak-beta` ve 50 GB boot diski sonlandırıldı. Yalnızca `ortak-beta-yeni` 2 OCPU/12 GB ve yaklaşık 47 GB boot diskiyle çalışıyor. Kısa süreli sunucu örtüşmesinin deneme kredisi kullanımına etkisi fatura ekranından ayrıca kontrol edilmeli |
 | Dış HTTPS | [Yeni sunucu](https://92.5.80.85.nip.io/) ve `/api/health` dışarıdan HTTPS 200 döndü; sertifika doğrulaması başarılı. On eşzamanlı `/api/readyz` isteği 200 döndü; API ve Ollama portları dışarıdan erişilemedi |
 | Sunucuda Llama 3 8B | İlk soğuk deney 35/36 idi: ilk istek 120,136 saniye. Başarısız rapor ayrı saklandı. Açılış yüklemesinden sonraki gerçek deney 36/36 geçti; en yavaş yanıt 51,756 saniye ve üç konteynerde OOM yok |
-| Canlı tarayıcıda Llama önizlemesi | “Mekân puanı daha önemli olsun, kişiler dengeli kalsın” isteği 70/33/33 kriter ve 1/1/1 kişi ağırlığı önerdi. Önizleme uygulanmadan kapatıldı; Google çağrısı yapılmadı |
-| Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Sağlık kontrolü geçti; Oracle pilotu sonrası ayrı SQLite yedeğinden 33 kullanım kaydı geri okunarak bütünlük ve guard eşleşmesi doğrulandı |
-| Google ve 24 saat gözlem | Yerel pilot ve ayrı Oracle pilotu gerçek Llama/Google ile 13/13 kontrolü geçti; her biri 1 Geocoding, 1 Places ve 9 Routes isteği yaptı. Oracle pilotu sunucudaki geçici backend'e SSH tüneli üzerinden çalıştırıldı. Ortak kullanım kaydı 33 satır ve ihtiyatlı toplam rezerv 58,05 TL. Ayrı kullanıcı onayıyla genel öneriler 100 TL toplam koruma içinde açıldı; tarayıcıda düğme etkin ve Llama hazır. Nihai 24 saatlik gözlem henüz tamamlanmadı |
+| Canlı tarayıcıda Llama ve Google | Gerçek HTTPS uygulamasında Llama 20,972 saniyede fiyat önceliği ve 2/1/1 kişi ağırlığı önerdi. Önizleme onayından sonra üç Google mekânı ve dokuz Google rotasıyla kartlar oluştu. Profil, kişi ağırlığı ve filtre değişiklikleri ek Google çağrısı üretmedi |
+| Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Canlı tarayıcı kabulü sonrası ayrı SQLite yedeğinden 43 kullanım kaydı geri okunarak bütünlük ve guard eşleşmesi doğrulandı; üretim sayacı değişmedi |
+| Google ve 24 saat gözlem | Yerel ve Oracle pilotları ayrı ayrı 13/13 geçti. Son üretim tarayıcısı akışı 10 gerçek Google isteğiyle tamamlandı. Toplam kayıt 43, ihtiyatlı rezerv 69,30 TL; 100 TL koruma içindeki kalan rezerv 30,70 TL. Günlük Places/Routes hakları dolduğu için yeni arama kapalıdır; mevcut sonuç güncellemeleri ücretsizdir. Nihai 24 saatlik gözlem henüz tamamlanmadı |
 
-14 Ekim'de kullanıcı, önceki 10.00 bekleme koşulunu açıkça değiştirerek yerel pilotun hemen başlatılmasını istedi. Onaylı 100 TL sınırıyla 11 gerçek Google isteği yapıldı; yeniden deneme olmadı. Bu, genel doğruluk veya Google faturası hakkında kesin bir iddia değildir. Ücretli sunucu, ödeme işlemi veya ikinci Google pilotu başlatılmadı.
+14 Ekim'de kullanıcı, önceki 10.00 bekleme koşulunu açıkça değiştirerek yerel pilotun hemen başlatılmasını istedi. Onaylı 100 TL sınırıyla 11 gerçek Google isteği yapıldı; yeniden deneme olmadı. Bu, genel doğruluk veya Google faturası hakkında kesin bir iddia değildir. Bu yerel çalışma sırasında ücretli sunucu, ödeme işlemi veya ikinci Google pilotu başlatılmadı; daha sonraki ayrı Oracle pilotu aşağıda açıklanır.
+
+## Üretim Tarayıcısı Kabulü
+
+`2ed0711` sürümü başarılı CI ve ARM64 imajlarından HTTPS üretim sunucusuna taşındı. Üç kurgusal katılımcının koordinatlarıyla gerçek Llama önizlemesi, kullanıcı onayı, Places araması, tam rota matrisi ve kriter bazlı öneri kartları aynı tarayıcı oturumunda çalıştırıldı. Konumlar modele gönderilmedi; onay öncesinde mevcut tercihler değişmedi. Llama fiyat ağırlığını 70, diğer iki kriteri 34/33 ve kişi ağırlıklarını 2/1/1 önerdi. Önerilerde kişi katkıları 0,50/0,25/0,25 olarak doğrulandı.
+
+Sonrasında `8f8f34f` test aracı sürümünün başarılı CI imajları da sunucuya alındı. `backend/app` ve `frontend/src` kodları ücretli kabulün geçtiği sürümle aynıdır; ikinci ücretli arama yapılmadı. Son imajlarda sağlık, koruma, kota görünümü ve klavye davranışı ücretsiz canlı kontrolle yeniden doğrulandı.
+
+Test boyunca istek başına tek deneme kullanıldı: 0 Geocoding, 1 Places ve 9 Routes, toplam 10 başarılı Google isteği; yeniden deneme yok. İhtiyatlı rezerv artışı 11,25 TL'dir, fatura tutarı değildir. Başlangıçtaki 33 kayıt ve 58,05 TL rezerv korundu; sonuçta 43 kayıt ve 69,30 TL oldu. Normal iki denemelik ayar geri yüklendi. Aynı sonuçlarda dört kriter profili, dengeli kişiler, kişi ağırlığı ve filtre değişiklikleri ücretli çağrı üretmedi. Yol tarifi bağlantıları yalnızca hedef mekânı içerdi. Sonuç kartları 390/1440 pikselde, açık/koyu temada yatay taşma üretmedi. Test senaryosu sonunda silindi; kalıcı konum, aday, rota ve Google cache tabloları boş.
+
+İlk koşunun bütün ücretli akış ve yerleşim kontrolleri geçti; son klavye kontrolü, seçenek metinlerini de içeren etiket için yanlış `exact` seçicisi nedeniyle başarısız kaydedildi. Bu rapor değiştirilmedi. Seçici düzeltildi; üretim sayfasında ayrı, sıfır Google ve sıfır model üretimi yapan kontrolle mobil/masaüstü klavye odağı ve kota uyarısı doğrulandı. Bu ek kontrol, ikinci bir ücretli arama değildir. Başarı özeti iki kanıtı birlikte değerlendirir; hata geçmişi korunur.
+
+Özel raporlar `output/deployment/browser-live-20261014-production/` ve `output/deployment/browser-live-20261014-keyboard-corrected/` altında tutulur. Yalnızca sürüm, süre, HTTP durumu, çağrı sayıları ve kontrol sonuçları kaydedilir; anahtar, oturum çerezi, ham tercih, koordinat ve Google yanıt içeriği yazılmaz. Otomatik CI testleri canlı ücretli testi kendiliğinden başlatmaz.
+
+`/locations/parse` sonucundaki koordinatlar senaryo isteğinin `value` alanına aktarılır; formdaki özgün link korunur. Kriter veya kişi ağırlığı değişikliği parse işlemini tekrarlamaz. Ön hesap her servisin doğrulanmış fiyatını ve yapılandırılmış deneme sınırını kullanır. `/runtime-config` içindeki `google_search_capacity`, sentetik/çözümlenmiş koordinat modları ve kişi sayısı için Türkçe kapasite durumunu sunar; arama öncesi ve sonrası yenilenir. Kesilen matris aynı senaryoda yalnızca eksik kişi–mekân çiftlerini tamamlar; tam Google matrisi olmadan öneri sunulmaz.
+
+Yeniden ücretli test ancak mevcut kayıt ve kotalar uzlaştırıldıktan, ilgili onay doğrulandıktan sonra yapılır. Sadece sağlık, kota görünümü ve klavye kontrolü için ücretli akışa gerek yoktur:
+
+```bash
+cd frontend
+npm run test:live:read-only
+```
+
+Bu komut yalnızca HTTPS sayfasını ve sağlık/yapılandırma uçlarını okur. `npm run test:live` ise açık onay bayrakları, tek deneme, mevcut 100 TL koruması ve yeterli servis kotası ister; kendiliğinden tekrar çalıştırılmamalıdır. Nihai yayın kabulü, mevcut sunucu sağlık zamanlayıcısında 24 saatlik gözlem tamamlanınca verilir. Silinen Codex otomasyonu yeniden kurulmadı.
+
+Son sürümün sağlık ve ücretsiz tarayıcı kontrollerinden sonra gözlem başlangıcı 14 Ekim 2026 02.45 Türkiye saati olarak kaydedildi. Hata veya uzun kontrol boşluğu yaşanmazsa en erken 15 Ekim 2026 02.45'te 24 saat koşulu sağlanabilir; bu saatin gelmesi tek başına kabul değildir, sunucu gözlem kaydı ayrıca okunmalıdır. Beş dakikalık sağlık ve günlük yedek zamanlayıcıları etkin; Google çağrısı veya Llama üretimi yapmazlar.
 
 ## Ayrı Yerel Google Pilotu
 

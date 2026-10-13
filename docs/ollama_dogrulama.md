@@ -8,7 +8,9 @@ Son yerel canlı kayıt: `output/ollama/llama3-final.json`; ilk başarısız kay
 
 ## Yayın Kabulü
 
-13 Ekim 2026'da üretim hazırlığı için 124 backend testi ve 390/1440 pikselde toplam 14 otomatik arayüz testi geçti. Arayüz testlerindeki model yanıtları kurgusal test yanıtlarıdır; canlı Llama doğrulaması yerine sayılmaz. Oracle sunucusunda üçer tekrar, 36/36 kontrol, istek başına en fazla 120 saniye ve bellek taşması olmaması ayrıca doğrulanmalıdır. Sunucu sonucu henüz alınmadı.
+13 Ekim 2026'nın ilk üretim hazırlığında 124 backend ve 14 arayüz testi geçmişti; bu tarihsel sonuçlar sunucu model doğrulaması değildi. Sonrasında Oracle'daki gerçek `llama3:8b`, 12 kurgusal Türkçe senaryoyu üçer kez çalıştırarak **36/36** kabulü geçti. İlk soğuk deneyde 120 saniyeyi aşan tek istek vardı; başarısız rapor korundu. Açılışta model yüklemesinden sonraki kabulde en uzun yanıt 51,756 saniye ve bellek taşması yoktu.
+
+14 Ekim'de gerçek üretim HTTPS tarayıcısında fiyat önceliği ve 2/1/1 kişi ağırlığı isteği 20,972 saniyede yorumlandı. Onay öncesinde ayarlar değişmedi; onaydan sonra üç gerçek Google mekânı ve dokuz rota ile öneriler üretildi. Profil/kişi/filtre güncellemeleri ek Google çağrısı üretmedi. Son CI sonucu **167 backend ve 34 arayüz testi**; bu otomatik testler gerçek model kabulünden ayrı tutulur. Klavye testindeki seçici hatası sıfır ücretli çağrılı canlı kontrolle düzeltildi; özgün başarısız kayıt silinmedi. Yerel ve üretim deneyleri genel Türkçe doğruluk garantisi değildir. Tam yayın kabulü için 24 saatlik sağlık gözlemi hâlâ gereklidir. Güncel ayrıntılar [yayın kılavuzundadır](yayin_kilavuzu.md).
 
 ## Önceki Qwen Doğrulaması
 

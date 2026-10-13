@@ -96,7 +96,7 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
         "maximum_google_attempts": 33,
         "pricing_reference": "https://developers.google.com/maps/billing-and-pricing/pricing",
         "estimated_list_cost_usd_before_tax_credits": {"normal": 0.13, "all_requests_retried_twice": 0.39},
-        "cost_estimate_note": "12 Ekim 2026 tarifesi: Geocoding 0.005 USD, Nearby Search Enterprise 0.035 USD, trafik verili Compute Routes Pro 0.010 USD/istek. Fatura tutarı değildir; kur, vergi ve ücretsiz kullanım ayrıca doğrulanır. Yerel çağrı sayacı parasal bir üst sınır değildir.",
+        "cost_estimate_note": "Google liste fiyatları: Geocoding 0.005 USD, Nearby Search Enterprise 0.035 USD, trafik verili Compute Routes Pro 0.010 USD/istek. Fatura tutarı değildir; kur, vergi ve ücretsiz kullanım ayrıca doğrulanır. Yerel çağrı sayacı parasal bir üst sınır değildir.",
         "source_archive": "source.tar.gz",
     }
     save_source_snapshot(output)
@@ -131,6 +131,8 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
             health = await stage("health", "/health")
             report["health"] = {key: health.get(key) for key in ("status", "google_configured", "google_status", "google_services", "google_usage", "ai_provider", "ai_model", "ai_ready")}
             usage = health.get("google_usage", {})
+            service_remaining = runtime.get("google_service_remaining") if api_base.startswith("https://") else usage.get("service_remaining")
+            required_service_attempts = {"geocoding": 3, "places": 3, "routes": 27}
             if not health.get("google_configured"):
                 report.update(status="blocked", reason="GOOGLE_MAPS_API_KEY tanımlı değil; canlı Google testi yapılmadı.")
             elif not live:
@@ -145,8 +147,11 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 report.update(status="blocked", reason="Backend bütçe, fiyat veya kullanım kaydı kontrolü geçmedi; ücretli istek gönderilmedi.")
             elif health.get("google_usage", {}).get("remaining_today", runtime.get("google_remaining_requests", 0)) < 33:
                 report.update(status="blocked", reason="Yeniden denemeler dâhil 33 isteklik güvenli test için günlük yerel kota yetersiz.")
-            elif runtime.get("google_service_remaining") and any(runtime["google_service_remaining"].get(key, 0) < count for key, count in {"geocoding": 3, "places": 3, "routes": 27}.items()):
-                report.update(status="blocked", reason="Google servis kotaları yeniden denemeli pilot için yetersiz.")
+            elif not isinstance(service_remaining, dict) or any(
+                type(service_remaining.get(key)) is not int or service_remaining[key] < count
+                for key, count in required_service_attempts.items()
+            ):
+                report.update(status="blocked", reason="Google servis kotaları doğrulanamadı veya yeniden denemeli pilot için yetersiz.")
             elif with_llama and not (health.get("ai_provider") == "ollama" and health.get("ai_model") == "llama3:8b" and health.get("ai_ready") is True):
                 report.update(status="blocked", reason="Mevcut Llama 3 8B hazır değil; başka sağlayıcıya geçilmedi ve ücretli Google isteği gönderilmedi.")
             else:

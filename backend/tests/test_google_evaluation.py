@@ -31,7 +31,8 @@ def test_pilot_cli_imports_schema_in_container_layout(tmp_path):
 def healthy(**usage):
     return {"google_configured": True, "google_usage": {
         "calls_enabled": True, "available": True, "budget_enforced": True,
-        "budget_limit_tl": 100, "remaining_today": 33, **usage,
+        "budget_limit_tl": 100, "remaining_today": 33,
+        "service_remaining": {"geocoding": 3, "places": 3, "routes": 27}, **usage,
     }, "ai_provider": "ollama", "ai_model": "llama3:8b", "ai_ready": True}
 
 
@@ -112,6 +113,24 @@ def test_live_run_requires_capacity_for_retries(monkeypatch, tmp_path):
         return httpx.Response(200, json=healthy(remaining_today=32))
     install_mock(monkeypatch, handler)
     report = asyncio.run(evaluate_google_maps.evaluate("http://127.0.0.1:8000", True, tmp_path, spending_limit_tl=100))
+    assert report["status"] == "blocked"
+    assert requests == ["/health"]
+
+
+@pytest.mark.parametrize("service_remaining", [
+    None,
+    {"geocoding": 2, "places": 3, "routes": 27},
+    {"geocoding": 3, "places": 2, "routes": 27},
+    {"geocoding": 3, "places": 3, "routes": 26},
+    {"geocoding": 3, "places": 3},
+])
+def test_live_run_requires_verified_service_headroom(monkeypatch, tmp_path, service_remaining):
+    requests = []
+    def handler(request):
+        requests.append(request.url.path)
+        return httpx.Response(200, json=healthy(service_remaining=service_remaining))
+    install_mock(monkeypatch, handler)
+    report = asyncio.run(evaluate_google_maps.evaluate("http://127.0.0.1:8000", True, tmp_path, 100))
     assert report["status"] == "blocked"
     assert requests == ["/health"]
 

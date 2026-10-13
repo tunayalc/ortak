@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     public_max_candidates: int = Field(default=3, ge=3, le=20, alias="PUBLIC_MAX_CANDIDATES")
     public_max_k: int = Field(default=3, ge=1, le=20, alias="PUBLIC_MAX_K")
     google_budget_limit_tl: float = Field(default=1200, gt=0, allow_inf_nan=False, alias="GOOGLE_BUDGET_LIMIT_TL")
+    google_budget_enforcement_enabled: bool = Field(default=False, alias="GOOGLE_BUDGET_ENFORCEMENT_ENABLED")
     google_unit_prices_tl: dict[str, float] = Field(default_factory=dict, alias="GOOGLE_UNIT_PRICES_TL")
     google_price_verified_at: Optional[datetime] = Field(default=None, alias="GOOGLE_PRICE_VERIFIED_AT")
     google_price_source: str = Field(default="", alias="GOOGLE_PRICE_SOURCE")
@@ -72,6 +73,10 @@ class Settings(BaseSettings):
     @property
     def production(self) -> bool:
         return self.app_environment == "production"
+
+    @property
+    def google_budget_protected(self) -> bool:
+        return self.production or self.google_budget_enforcement_enabled
 
     @property
     def origins(self) -> list[str]:

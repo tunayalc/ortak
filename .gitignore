@@ -22,6 +22,7 @@ Resmi belgeler*/
 *.zip
 *.tar.gz
 *.db-*
+*.usage-guard.json*
 *.pem
 *.key
 deploy/.env

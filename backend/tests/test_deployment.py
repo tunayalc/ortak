@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+import importlib.util
 import json
 from pathlib import Path
 import sqlite3
@@ -19,6 +20,20 @@ from test_public_release import production
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from deploy import operations
+
+
+@pytest.mark.parametrize("path", [
+    "backend/scripts/ortak.usage-guard.json",
+    "backend/tests/ortak.usage-guard.json.lock",
+    "deploy/guard/usage.json",
+    "deploy/data/ledger.json",
+])
+def test_public_scan_rejects_private_usage_guard(path):
+    script = Path(__file__).resolve().parents[2] / "scripts/scan_public.py"
+    spec = importlib.util.spec_from_file_location("scan_public", script)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.allowed(path) is False
 
 
 def test_empty_price_timestamp_allows_disabled_initial_setup():
@@ -169,3 +184,32 @@ def test_ledger_transfer_requires_root_before_docker_or_file_access(monkeypatch,
     monkeypatch.setattr(operations, "configuration", lambda: pytest.fail("No Docker call before UID validation"))
     with pytest.raises(ValueError, match="sudo"):
         operations.import_ledger(tmp_path / "missing.json")
+
+
+def test_local_pilot_enforces_budget_without_production_mode(production, monkeypatch):
+    monkeypatch.setenv("APP_ENVIRONMENT", "development")
+    monkeypatch.setenv("GOOGLE_BUDGET_ENFORCEMENT_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_BUDGET_LIMIT_TL", "1.5")
+    get_settings.cache_clear()
+    assert not get_settings().production
+    assert get_settings().google_budget_protected
+    google_usage.reserve_call("routes_compute_routes", 1)
+    with pytest.raises(google_usage.GoogleUsageBlocked, match="bütçesi"):
+        google_usage.reserve_call("routes_compute_routes", 1)
+    assert google_usage.usage_status()["estimated_cost_tl"] == 1
+
+
+@pytest.mark.parametrize("missing", ["prices", "guard"])
+def test_local_pilot_requires_verified_prices_and_existing_guard(production, monkeypatch, missing):
+    monkeypatch.setenv("APP_ENVIRONMENT", "development")
+    monkeypatch.setenv("GOOGLE_BUDGET_ENFORCEMENT_ENABLED", "true")
+    if missing == "prices":
+        monkeypatch.setenv("GOOGLE_UNIT_PRICES_TL", "{}")
+    else:
+        usage_guard.guard_path().unlink()
+    get_settings.cache_clear()
+    with pytest.raises(google_usage.GoogleUsageBlocked):
+        google_usage.reserve_call("geocoding", 1)
+    assert google_usage.usage_status()["available"] is False
+    with get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM google_api_usage").fetchone()[0] == 0

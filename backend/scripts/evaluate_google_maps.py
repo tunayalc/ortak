@@ -15,9 +15,13 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
+from pydantic import ValidationError
 
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app.schemas import PreferenceSuggestion
+
 PROFILES = {
     "balanced": {"rating": 34, "cost": 33, "proximity": 33},
     "rating": {"rating": 70, "cost": 15, "proximity": 15},
@@ -75,7 +79,7 @@ def save_report(report: dict, directory: Path) -> None:
     (directory / "report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: float | None = None) -> dict:
+async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: float | None = None, with_llama: bool = False) -> dict:
     report = {
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "code_sha256": code_fingerprint(),
@@ -87,6 +91,7 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
         "checks": {},
         "billing_cost_tl": None,
         "authorized_test_limit_tl": spending_limit_tl,
+        "with_llama": with_llama,
         "planned_google_calls": 11,
         "maximum_google_attempts": 33,
         "pricing_reference": "https://developers.google.com/maps/billing-and-pricing/pricing",
@@ -124,7 +129,8 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 parsed = urlparse(api_base)
                 client.headers.update({"Origin": f"{parsed.scheme}://{parsed.netloc}", "X-ORTAK-CSRF": runtime.get("csrf_token", "")})
             health = await stage("health", "/health")
-            report["health"] = {key: health.get(key) for key in ("status", "google_configured", "google_status", "google_services", "google_usage")}
+            report["health"] = {key: health.get(key) for key in ("status", "google_configured", "google_status", "google_services", "google_usage", "ai_provider", "ai_model", "ai_ready")}
+            usage = health.get("google_usage", {})
             if not health.get("google_configured"):
                 report.update(status="blocked", reason="GOOGLE_MAPS_API_KEY tanımlı değil; canlı Google testi yapılmadı.")
             elif not live:
@@ -133,12 +139,36 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 report.update(status="blocked", reason="Canlı test için kullanıcının onayladığı vergi dâhil test bütçesi --max-spend-tl ile belirtilmelidir.")
             elif not health.get("google_usage", {}).get("calls_enabled"):
                 report.update(status="blocked", reason="Google Maps çağrıları uygulamada kapalı; faturalandırma/harcama onayı bekleniyor.")
+            elif usage.get("budget_enforced") is not True or not isinstance(usage.get("budget_limit_tl"), (int, float)) or not 0 < usage["budget_limit_tl"] <= spending_limit_tl:
+                report.update(status="blocked", reason="Backend kalıcı bütçe koruması açık ve onaylı test bütçesiyle sınırlı olmalıdır; ücretli istek gönderilmedi.")
+            elif usage.get("available") is not True:
+                report.update(status="blocked", reason="Backend bütçe, fiyat veya kullanım kaydı kontrolü geçmedi; ücretli istek gönderilmedi.")
             elif health.get("google_usage", {}).get("remaining_today", runtime.get("google_remaining_requests", 0)) < 33:
                 report.update(status="blocked", reason="Yeniden denemeler dâhil 33 isteklik güvenli test için günlük yerel kota yetersiz.")
             elif runtime.get("google_service_remaining") and any(runtime["google_service_remaining"].get(key, 0) < count for key, count in {"geocoding": 3, "places": 3, "routes": 27}.items()):
                 report.update(status="blocked", reason="Google servis kotaları yeniden denemeli pilot için yetersiz.")
+            elif with_llama and not (health.get("ai_provider") == "ollama" and health.get("ai_model") == "llama3:8b" and health.get("ai_ready") is True):
+                report.update(status="blocked", reason="Mevcut Llama 3 8B hazır değil; başka sağlayıcıya geçilmedi ve ücretli Google isteği gönderilmedi.")
             else:
                 fixture = report["fixture"]
+                suggestion = None
+                if with_llama:
+                    suggestion = PreferenceSuggestion.model_validate(await stage("llama_preference", "/preferences/interpret", {
+                        "text": "Fiyat uygunluğu daha önemli olsun; Kişi 1'e yakınlık iki kat önemli olsun.",
+                        "participants": [{"id": f"user-{index}", "label": f"Kişi {index}", "delta_weight": 1} for index in range(1, 4)],
+                        "criterion_weights": PROFILES["balanced"],
+                    }))
+                    report["checks"]["llama_preference"] = (
+                        suggestion.source == "ollama" and suggestion.model == "llama3:8b"
+                        and suggestion.criterion_weights.model_dump() == {"rating": 34, "cost": 70, "proximity": 33}
+                        and suggestion.participant_proximity_weights == {"user-1": 2, "user-2": 1, "user-3": 1}
+                        and suggestion.min_rating is None and suggestion.max_duration_minutes is None
+                    )
+                    if not report["checks"]["llama_preference"]:
+                        raise RuntimeError("Llama önerisi beklenen tercihi karşılamadı; ücretli Google araması başlatılmadı.")
+                    report["llama"] = {"source": suggestion.source, "model": suggestion.model,
+                                       "criterion_weights": suggestion.criterion_weights.model_dump(),
+                                       "participant_proximity_weights": suggestion.participant_proximity_weights}
                 scenario = await stage("geocoding_and_scenario", "/scenarios", {key: fixture[key] for key in ("city", "category", "group_size", "seed", "radius_m")} | {"input_mode": "synthetic", "session_only": True})
                 scenario_id = scenario["id"]
                 candidates = await stage("places_new", "/candidates/search", {"scenario_id": scenario_id, "max_results": fixture["max_candidates"]})
@@ -152,6 +182,25 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 )
                 if not report["checks"]["complete_google_matrix"]:
                     raise RuntimeError("Rota matrisi eksik veya gerçek Google verisi olmayan satırlar içeriyor.")
+                if suggestion:
+                    result = await stage("llama_recommendation", "/recommendations", {
+                        "scenario_id": scenario_id, "k": 3,
+                        "criterion_weights": suggestion.criterion_weights.model_dump(),
+                        "participant_proximity_weights": suggestion.participant_proximity_weights,
+                    })
+                    requested = suggestion.criterion_weights.model_dump()
+                    total = sum(requested.values())
+                    person_total = sum(suggestion.participant_proximity_weights.values())
+                    expected_people = {key: value / person_total for key, value in suggestion.participant_proximity_weights.items()}
+                    report["checks"]["llama_applied"] = (
+                        len(result["recommendations"]) == 3
+                        and all(abs(result["criterion_weights"][key] - value / total) <= 0.001 for key, value in requested.items())
+                        and all(
+                            {entry["user_id"] for entry in row["score_breakdown"]["proximity_contributions"]} == set(expected_people)
+                            and all(abs(entry["weight"] - expected_people[entry["user_id"]]) <= 0.001 for entry in row["score_breakdown"]["proximity_contributions"])
+                            for row in result["recommendations"]
+                        )
+                    )
                 report["place_ids"] = [candidate["place_id"] for candidate in candidates]
                 report["profiles"] = []
                 for profile, weights in PROFILES.items():
@@ -167,9 +216,11 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 experiment = await stage("baseline_comparison", "/experiments/run", {"scenario_id": scenario_id, "k": 3, "random_repeats": 30})
                 report["checks"]["baseline_methods"] = len(experiment["baselines"]) == 5
                 report["checks"]["google_call_metadata"] = sum(item["google_calls"] for item in report["stages"]) >= 11
+                report["checks"]["no_extra_google_calls_for_preferences"] = all(item["google_calls"] == 0 for item in report["stages"] if item["stage"].startswith(("profile_", "lambda_", "llama_")) or item["stage"] == "baseline_comparison")
+                report["checks"]["attempt_limit"] = sum(item["google_calls"] for item in report["stages"]) <= 33
                 report["live_google_verified"] = all(report["checks"].values())
                 report["status"] = "passed" if report["live_google_verified"] else "failed"
-        except (httpx.HTTPError, ValueError, KeyError, RuntimeError) as exc:
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, ValidationError) as exc:
             report.update(status="failed", reason=str(exc) if isinstance(exc, RuntimeError) else f"Test bağlantısı veya yanıtı okunamadı ({type(exc).__name__}).")
         finally:
             if scenario_id:
@@ -189,9 +240,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--api-base", default="http://127.0.0.1:8000")
     parser.add_argument("--live", action="store_true", help="Gerçek Google çağrılarını açar: 1 geocoding, 1 Places, en çok 9 rota; yeniden denemeler ek çağrı yapabilir.")
+    parser.add_argument("--with-llama", action="store_true", help="Google aramasından önce mevcut gerçek Llama 3 8B tercihini doğrular ve rota matrisine uygular.")
     parser.add_argument("--max-spend-tl", type=float, help="Kullanıcının onayladığı vergi dâhil test bütçesi; Google faturasını veya diğer kullanımları parasal olarak durdurmaz.")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "output/google_maps" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
     args = parser.parse_args()
-    result = asyncio.run(evaluate(args.api_base, args.live, args.output_dir, args.max_spend_tl))
+    result = asyncio.run(evaluate(args.api_base, args.live, args.output_dir, args.max_spend_tl, args.with_llama))
     print(json.dumps({"status": result["status"], "live_google_verified": result["live_google_verified"], "reason": result.get("reason"), "output_dir": str(args.output_dir)}, ensure_ascii=False))
     sys.exit(0 if result["status"] == "passed" else 2 if result["status"] in {"blocked", "preflight_only"} else 1)

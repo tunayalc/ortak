@@ -6,16 +6,35 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 128/128 başarılı; özel ledger aktarımında izin ve hata temizliği doğrulandı |
+| Backend testleri | 142/142 başarılı; yerel pilot bütçe koruması, model ön kontrolü, özel ledger aktarımı, kullanım guard'ının paylaşım dışı tutulması ve konteynerde pilot CLI açılışı doğrulandı |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| Yerel ARM64 API ve web imajları | Son tercih akışının `b57bab0` web imajı derlendi; Caddy, `/api` bağlantısı ve özel dosya yokluğu doğrulandı. API yapılandırma dosyası kaynakla aynı. GitHub Actions / GHCR kabulü bekliyor |
+| Yerel ARM64 API ve web imajları | Güncel API ve web imajları derlendi; üretim açılışı, bütçe koruması, pilot CLI, Caddy, `/api` bağlantısı ve özel dosya yokluğu doğrulandı. GitHub Actions / GHCR kabulü bekliyor; yerel kontrol canlı yayın değildir |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
 | GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
 | Oracle hesabı ve ücretsiz kapasite | Konsol erişimi doğrulanmadı; kaynak oluşturulmadı |
 | Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
 
-Bu turda yeni Google çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
+Bu turda yeni ücretli Google Maps API çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
+
+## Ayrı Yerel Google Pilotu
+
+Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yeni ücretli istek henüz gönderilmedi. Pilot, yeterli kota ve model bağlantısı doğrulanana kadar bekler. Bu izin GitHub erişimini genişletmez ve yerel sonucu Oracle sunucu kabulü yapmaz.
+
+13 Ekim'de doğrulanan [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing): Geocoding 0,005 USD, Nearby Search Enterprise 0,035 USD, trafik verili Compute Routes Pro 0,010 USD/istek. Üç kurgusal kişi ve üç aday için 11 normal çağrı 0,13 USD, tüm istekler iki kez yeniden denenirse 33 deneme 0,39 USD eder. [Google Türkiye KDV oranı %20'dir](https://docs.cloud.google.com/billing/docs/resources/vat-overview). [TCMB'nin son yayımlanan bülteni](https://www.tcmb.gov.tr/kurlar/today.xml), 12 Ekim için USD döviz satışını 49,3358 TL gösterdi. Bu TCMB değeri Google'ın fatura kuru değildir.
+
+İhtiyatlı rezervasyonda 60 TL/USD ve ayrıca %25 güvenlik payı kullanıldı: normal 11,70 TL, azami 35,10 TL. Ücretsiz kullanım düşülmedi; gerçek fatura daha düşük veya sıfır olabilir. Rezervasyon banka tahsilatı için kesin tavan değildir. Kaynaklı özel fiyat kaydı ve ön kontrol sonucu GitHub dışında tutulur; çalıştırmadan önce fiyat, kur, vergi ve servis kotaları yeniden doğrulanır.
+
+13 Ekim'de backend'de 22 deneme hakkı kaldı. [Geocoding günlük kotası Pasifik gece yarısında yenilenir](https://developers.google.com/maps/documentation/geocoding/usage-and-billing); sonraki kontrol en erken 14 Ekim 10.00 İstanbul saatidir. Sayaçlar sıfırlanmaz ve kota artırılmaz.
+
+Onaylanan yerel pilot ayrı ve yalnızca `127.0.0.1` üzerinde erişilen geçici backend'de çalıştırılır. Ana uygulamadaki ücretli çağrılar kapalı kalır. Mevcut veritabanı ve guard dosyasının mutlak yolları doğrulanıp aynı kullanım kaydı kullanılır; yeni bir boş veritabanıyla kotayı yeniden başlatmak yasaktır. Geçici backend için `GOOGLE_BUDGET_ENFORCEMENT_ENABLED=true`, `GOOGLE_BUDGET_LIMIT_TL=100`, doğrulanmış birim TL rezervleri ve fiyat kaynakları zorunludur. Bu ayarlar örnek dosyada bulunur; gerçek anahtar paylaşılmaz. Bütçe koruması, fiyat veya guard eksikse test Google'a istek göndermez.
+
+```bash
+cd backend
+.venv-release/bin/python scripts/evaluate_google_maps.py --api-base http://127.0.0.1:8012 --live --with-llama --max-spend-tl 100
+```
+
+Bu komut yalnızca son onay, yeterli kota ve korumalı geçici backend hazırken çalıştırılır. Önce mevcut gerçek Llama'nın puan/fiyat/yakınlık ve `2x/1x/1x` tercihi doğrulanır; sonra Google matrisi kurulur ve öneriye uygulanır. Model hazır değilse veya yanlış tercih döndürürse ücretli mekân araması başlamaz. Profil ve kişi tercihi değişikliklerinin ek Google çağrısı üretmemesi ayrıca kontrol edilir. Model kaynağı, süreler, çağrı sayıları, ağırlıklar ve kontrol sonuçları kaydedilir; ham tercih, koordinat ve Google içerikleri kaydedilmez. Oracle'daki Google pilotu bu yerel çalışmanın devamı olarak otomatik yeniden yapılmaz; sunucu üzerinde ücretli tekrar ayrı onay gerektirir.
 
 ## Tercihten konuma dayalı aramaya geçiş
 
@@ -61,7 +80,7 @@ sudo python3 operations.py import-ledger --ledger private/ledger.json
 
 Bu komut yalnızca ledger kopyasını içeren geçici bir dizini API'nin `10001` kullanıcısına verir ve `/transfer:ro` olarak bağlar. Özel dizinin tamamı, sağlık kayıtları veya sürüm dosyaları API'ye açılmaz. Başarıda ve hatada geçici kopya kaldırılır; asıl aktarım dosyası saklanır. Aktarım kaydı uygulama imajına eklenmez ve Google çağrıları açılmaz. Kullanım geçmişi gerçekten yoksa `initialize-empty-ledger` yalnızca ilk kurulumda kullanılabilir. Mevcut guard veya kullanım kaydı varken yeniden başlatma olarak kullanılamaz. Guard ayrı dizinde tutulur; veritabanı kaybolur veya eski yedeğe dönerse Google çağrıları kapanır. Guard kaybolursa otomatik yeniden oluşturulmaz; eski kayıtlar ve Cloud Billing uzlaştırılır.
 
-Anahtar yalnızca üç Google API'sine ve sunucunun çıkış IP'sine sınırlandırılır. Yereldeki ücretli çağrılar kapalı kalır. Normal sağlık kontrolü Google'a istek göndermez. Genel günlük 33 deneme yanında Geocoding toplam 3, Nearby Search 3, Routes 27 sınırı backend'de de uygulanır. Başarısız ve yeniden denenen istekler de sayılır.
+Anahtar yalnızca üç Google API'sine ve sunucunun çıkış IP'sine sınırlandırılır. Ana yerel uygulamadaki ücretli çağrılar kapalı kalır; tek onaylı yerel pilot yalnızca yukarıdaki ayrı, korumalı süreçte çalışabilir. Normal sağlık kontrolü Google'a istek göndermez. Genel günlük 33 deneme yanında Geocoding toplam 3, Nearby Search 3, Routes 27 sınırı backend'de de uygulanır. Başarısız ve yeniden denenen istekler de sayılır.
 
 Google başlangıçta kapalıdır. Pilot için vergi ve kur dâhil ihtiyatlı birim TL fiyatları, kaynakları ve doğrulama zamanı girilir. Fiyat bilgisi eksik veya yedi günden eskiyse çağrılar durur. İlk pilot bütçesi en fazla 100 TL'dir; ileride ayrıca onaylanmış kullanım bile 1.200 TL güvenlik rezervini aşamaz. Ön ödeme, kullanım hedefi ve kesin tahsilat tavanı değildir. [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing)
 

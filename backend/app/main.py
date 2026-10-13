@@ -80,7 +80,7 @@ async def health() -> dict[str, object]:
         "google_configured": settings.has_google_key,
         "google_status": "configured_not_verified" if settings.has_google_key else "unconfigured",
         "google_services": ["Places API (New)", "Routes API", "Geocoding API"],
-        "google_usage": {"calls_enabled": usage["calls_enabled"], "available": usage.get("available", False)} if settings.production else usage,
+        "google_usage": {key: usage[key] for key in ("calls_enabled", "available", "budget_enforced", "budget_limit_tl")} if settings.production else usage,
         **(await llm_status()),
         **({} if settings.production else {"osrm_base_url": settings.osrm_base_url}),
     }

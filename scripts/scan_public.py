@@ -13,7 +13,7 @@ PRIVATE_PARTS = {"node_modules", "__pycache__", ".venv", ".venv-release", "outpu
 
 def allowed(path):
     item = Path(path)
-    return (path in EXACT or path.startswith(PUBLIC)) and not (set(item.parts) & PRIVATE_PARTS) and (not item.name.startswith(".env") or item.name == ".env.example") and item.suffix not in {".db", ".sqlite", ".sqlite3", ".pem", ".key", ".pdf", ".docx", ".xlsx", ".gz", ".zip", ".pyc"}
+    return (path in EXACT or path.startswith(PUBLIC)) and not (set(item.parts) & PRIVATE_PARTS) and ".usage-guard.json" not in item.name and (not item.name.startswith(".env") or item.name == ".env.example") and item.suffix not in {".db", ".sqlite", ".sqlite3", ".pem", ".key", ".pdf", ".docx", ".xlsx", ".gz", ".zip", ".pyc"}
 
 
 def scan(files):

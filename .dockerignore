@@ -7,6 +7,7 @@
 **/.pytest_cache
 **/*.db*
 **/*.sqlite*
+**/*.usage-guard.json*
 **/*.pem
 **/*.key
 .git
@@ -17,6 +18,8 @@ Resmi belgeler*
 docs/google_maps_canli_test.md
 docs/rapor_duzeltme_notlari.md
 deploy/backups
+deploy/data
+deploy/guard
 deploy/private
 **/*.pdf
 **/*.docx

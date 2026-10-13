@@ -66,10 +66,12 @@ def usage_status() -> dict[str, object]:
         "usage_day": day,
         "timezone": "Europe/Istanbul",
         "scope": "this_backend_database",
+        "budget_enforced": settings.google_budget_protected,
+        "budget_limit_tl": settings.google_budget_limit_tl,
     }
     status["available"] = settings.google_maps_calls_enabled and used < settings.google_maps_daily_call_limit
     status["unavailable_reason"] = "" if status["available"] else "Google işlemleri şu anda kapalı veya günlük kota dolu."
-    if settings.production:
+    if settings.google_budget_protected:
         try:
             prices = verified_prices()
             with get_conn() as conn:
@@ -91,7 +93,7 @@ def ensure_capacity(required: int = 1) -> None:
     if required > status["remaining_today"]:
         raise GoogleUsageBlocked("Google Maps günlük yerel çağrı sınırı yetersiz. Yeni istek gönderilmedi; kota ve kullanım kaydını kontrol edin.")
     settings = get_settings()
-    if settings.production:
+    if settings.google_budget_protected:
         worst = max(verified_prices().values())
         with get_conn() as conn:
             if estimated_spend(conn, worst) + required * worst > settings.google_budget_limit_tl:
@@ -104,7 +106,7 @@ def reserve_call(operation: str, attempt: int) -> int:
         raise GoogleUsageBlocked("Google Maps çağrıları kapalı; harcama onayı olmadan istek gönderilmedi.")
     price = None
     worst = 0
-    if settings.production:
+    if settings.google_budget_protected:
         prices = verified_prices()
         if operation not in prices:
             raise GoogleUsageBlocked("Bu Google işlemi için doğrulanmış fiyat yok; istek gönderilmedi.")
@@ -116,7 +118,7 @@ def reserve_call(operation: str, attempt: int) -> int:
         used = conn.execute("SELECT COUNT(*) FROM google_api_usage WHERE usage_day = ?", (day,)).fetchone()[0]
         if used >= settings.google_maps_daily_call_limit:
             raise GoogleUsageBlocked("Google Maps günlük yerel çağrı sınırına ulaşıldı; yeni istek gönderilmedi.")
-        if settings.production:
+        if settings.google_budget_protected:
             verify_ledger(conn)
             if operation not in OPERATIONS:
                 raise GoogleUsageBlocked("Desteklenmeyen Google işlemi; istek gönderilmedi.")
@@ -130,7 +132,7 @@ def reserve_call(operation: str, attempt: int) -> int:
             "INSERT INTO google_api_usage (usage_day, timestamp_utc, operation, attempt, estimated_cost_tl) VALUES (?, ?, ?, ?, ?)",
             (day, datetime.now(timezone.utc).isoformat(), operation, attempt, price),
         )
-        if settings.production:
+        if settings.google_budget_protected:
             # Persist before dispatch. A DB failure afterwards fails closed, never refunds a call.
             try:
                 usage_guard.write(conn)

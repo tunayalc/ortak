@@ -61,7 +61,9 @@ cd backend
 .venv/bin/python scripts/evaluate_google_maps.py --live --max-spend-tl <onaylanan-TL>
 ```
 
-Her çalışma `output/google_maps/<UTC-tarih>/` altında `run.json`, `stages.csv`, `report.md` ve anahtar içermeyen `source.tar.gz` üretir. API anahtarı veya harcama onayı eksikse `blocked` kaydı üretilir; gerçek Google testi başarılı sayılmaz. Fatura tutarı Google Cloud Billing belgesinden doğrulanır, çağrı sayısından ücret uydurulmaz.
+Bu betik, tam kaynak kodunun bulunduğu geliştirme bilgisayarından sunucuya veya ayrı yerel pilot backend'ine bağlanır. Harcama öncesinde backend'de kalıcı bütçe koruması zorunludur: geliştirme pilotunda `GOOGLE_BUDGET_ENFORCEMENT_ENABLED=true`, üretimde ise koruma her zaman açıktır. `GOOGLE_BUDGET_LIMIT_TL` onaylı bütçeyi aşamaz; doğrulanmış güncel birim fiyatlar ve mevcut kullanım guard'ı gerekir. Ana uygulamanın çağrıları açılmadan ayrı yerel pilot hazırlanabilir; ayrıntılar yayın kılavuzundadır. `--with-llama` seçeneği, Google aramasından önce mevcut gerçek Llama 3 8B tercihini doğrular.
+
+Her çalışma `output/google_maps/<UTC-tarih>/` altında `run.json`, `stages.csv`, `report.md` ve anahtar içermeyen `source.tar.gz` üretir. API anahtarı, harcama onayı, bütçe koruması veya kota eksikse `blocked` kaydı üretilir; gerçek Google testi başarılı sayılmaz. Fatura tutarı Google Cloud Billing belgesinden doğrulanır, çağrı sayısından ücret uydurulmaz.
 
 Google çağrıları varsayılan olarak kapalıdır. Faturalandırma ve bütçe onayından sonra `GOOGLE_MAPS_CALLS_ENABLED=true` açılır. İlk testte toplam günlük deneme sınırı 33'tür; yeniden denemeler dâhil SQLite sayacı servis yeniden başlatıldığında korunur. Sayaç yalnızca bu backend/veritabanını kapsar, TL tutarını veya başka uygulamaların kullanımını sınırlamaz. Test bitince çağrılar yeniden kapatılır.
 

@@ -186,6 +186,38 @@ def test_backup_and_transfer_preserve_usage_only(production, tmp_path, monkeypat
         assert conn.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0] == 0
 
 
+def test_ledger_import_enriches_only_missing_cost_and_is_idempotent(production, tmp_path):
+    google_usage.reserve_call("routes_compute_routes", 1)
+    with get_conn() as conn:
+        original = dict(conn.execute("SELECT * FROM google_api_usage WHERE id = 1").fetchone())
+        conn.execute("UPDATE google_api_usage SET estimated_cost_tl = NULL WHERE id = 1")
+    ledger = tmp_path / "enriched.json"
+    ledger.write_text(json.dumps({"version": 1, "usage": [original]}))
+    import_ledger(ledger)
+    import_ledger(ledger)
+    with get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM google_api_usage").fetchone()[0] == 1
+        assert conn.execute("SELECT estimated_cost_tl FROM google_api_usage WHERE id = 1").fetchone()[0] == original["estimated_cost_tl"]
+        usage_guard.verify(conn)
+
+
+def test_ledger_import_rejects_other_conflict_without_partial_merge(production, tmp_path):
+    google_usage.reserve_call("routes_compute_routes", 1)
+    with get_conn() as conn:
+        original = dict(conn.execute("SELECT * FROM google_api_usage WHERE id = 1").fetchone())
+        conn.execute("UPDATE google_api_usage SET estimated_cost_tl = NULL WHERE id = 1")
+    extra = dict(original, id=2)
+    conflicting = dict(original, outcome="different")
+    ledger = tmp_path / "conflict.json"
+    ledger.write_text(json.dumps({"version": 1, "usage": [extra, conflicting]}))
+    with pytest.raises(ValueError, match="Çakışan"):
+        import_ledger(ledger)
+    with get_conn() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM google_api_usage").fetchone()[0] == 1
+        assert conn.execute("SELECT estimated_cost_tl FROM google_api_usage WHERE id = 1").fetchone()[0] is None
+        usage_guard.verify(conn)
+
+
 @pytest.mark.parametrize("fail", [False, True])
 def test_ledger_transfer_only_exposes_private_copy_and_always_cleans_up(tmp_path, monkeypatch, fail):
     source = tmp_path / "ledger.json"
@@ -194,22 +226,23 @@ def test_ledger_transfer_only_exposes_private_copy_and_always_cleans_up(tmp_path
     monkeypatch.setattr(operations, "ROOT", tmp_path)
     monkeypatch.setattr(operations, "configuration", lambda: {})
     monkeypatch.setattr(operations.os, "geteuid", lambda: 0)
+    backups = tmp_path / "backups"
+    backups.mkdir(mode=0o700)
     ownership = []
     monkeypatch.setattr(operations.os, "chown", lambda path, uid, gid: ownership.append((Path(path), uid, gid)))
-    mounts = []
+    original_stat = Path.stat
+    monkeypatch.setattr(Path, "stat", lambda path, *args, **kwargs: SimpleNamespace(st_uid=10001, st_mode=0o40700) if path == backups else original_stat(path, *args, **kwargs))
+    staged_paths = []
 
     def compose(*args, **kwargs):
-        directory, target, access = args[args.index("-v") + 1].split(":")
-        directory = Path(directory)
-        mounts.append(directory)
-        assert target == "/transfer" and access == "ro"
-        assert directory != tmp_path / "private"
-        assert args[:3] == ("run", "--rm", "--no-deps")
-        assert args[-4:] == ("python", "scripts/backup_database.py", "import-ledger", "/transfer/ledger.json")
-        assert (directory / "ledger.json").read_text() == original
-        assert directory.stat().st_mode & 0o777 == 0o700
-        assert (directory / "ledger.json").stat().st_mode & 0o777 == 0o600
-        assert set(ownership) == {(directory, 10001, 10001), (directory / "ledger.json", 10001, 10001)}
+        assert args[:3] == ("exec", "-T", "api")
+        assert args[3:6] == ("python", "scripts/backup_database.py", "import-ledger")
+        staged = backups / Path(args[-1]).name
+        staged_paths.append(staged)
+        assert args[-1] == f"/backups/{staged.name}"
+        assert staged.read_text() == original
+        assert staged.stat().st_mode & 0o777 == 0o600
+        assert ownership == [(staged, 10001, 10001)]
         if fail:
             raise subprocess.CalledProcessError(1, "docker", stderr="private diagnostic")
 
@@ -219,10 +252,9 @@ def test_ledger_transfer_only_exposes_private_copy_and_always_cleans_up(tmp_path
             operations.import_ledger(source)
     else:
         operations.import_ledger(source)
-    assert len(mounts) == 1
-    assert not mounts[0].exists()
+    assert len(staged_paths) == 1
+    assert not staged_paths[0].exists()
     assert source.read_text() == original
-    assert (tmp_path / "private").stat().st_mode & 0o777 == 0o700
 
 
 def test_ledger_transfer_requires_root_before_docker_or_file_access(monkeypatch, tmp_path):

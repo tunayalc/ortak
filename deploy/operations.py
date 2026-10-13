@@ -93,18 +93,22 @@ def import_ledger(source: Path):
     if os.geteuid() != 0:
         raise ValueError("Kullanım kaydı aktarımı sudo ile çalıştırılmalı.")
     configuration()
-    private = ROOT / "private"
-    private.mkdir(parents=True, exist_ok=True, mode=0o700)
-    # Bind only a disposable copy; never expose the root-owned private directory.
-    with tempfile.TemporaryDirectory(prefix="ledger-transfer-", dir=private) as directory:
-        staged = Path(directory) / "ledger.json"
-        shutil.copyfile(source, staged)
+    backups = ROOT / "backups"
+    if not backups.is_dir() or backups.stat().st_uid != 10001 or backups.stat().st_mode & 0o077:
+        raise ValueError("Özel yedek dizini API kullanıcısına ait ve 0700 olmalı.")
+    # The API already mounts /backups; a second Compose container can collide with its static IP.
+    with tempfile.NamedTemporaryFile(prefix="ledger-transfer-", suffix=".json", dir=backups, delete=False) as handle:
+        staged = Path(handle.name)
+    try:
+        with source.open("rb") as original, staged.open("wb") as copy:
+            shutil.copyfileobj(original, copy)
+            copy.flush()
+            os.fsync(copy.fileno())
         os.chmod(staged, 0o600)
         os.chown(staged, 10001, 10001)
-        os.chmod(directory, 0o700)
-        os.chown(directory, 10001, 10001)
-        compose("run", "--rm", "--no-deps", "-v", f"{directory}:/transfer:ro",
-                "api", "python", "scripts/backup_database.py", "import-ledger", "/transfer/ledger.json")
+        compose("exec", "-T", "api", "python", "scripts/backup_database.py", "import-ledger", f"/backups/{staged.name}")
+    finally:
+        staged.unlink(missing_ok=True)
 
 
 def health():

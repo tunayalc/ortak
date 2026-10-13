@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -47,9 +48,18 @@ def import_ledger(source: Path):
         conn.execute("BEGIN IMMEDIATE")
         for row in payload["usage"]:
             columns = ("id", "usage_day", "timestamp_utc", "operation", "attempt", "http_status", "outcome", "elapsed_ms", "estimated_cost_tl")
+            if set(row) != set(columns):
+                raise ValueError("Kullanım kaydı alanları eksik veya beklenenden farklı.")
+            cost = row["estimated_cost_tl"]
+            if cost is not None and (type(cost) not in (int, float) or not math.isfinite(cost) or cost < 0):
+                raise ValueError("Geçersiz kullanım maliyeti; aktarım durduruldu.")
             existing = conn.execute("SELECT * FROM google_api_usage WHERE id = ?", (row["id"],)).fetchone()
             if existing:
-                if dict(existing) != row:
+                saved = dict(existing)
+                if all(saved[key] == row[key] for key in columns if key != "estimated_cost_tl") and saved["estimated_cost_tl"] is None and cost is not None and cost > 0:
+                    conn.execute("UPDATE google_api_usage SET estimated_cost_tl = ? WHERE id = ? AND estimated_cost_tl IS NULL", (cost, row["id"]))
+                    continue
+                if saved != row:
                     raise ValueError("Çakışan kullanım kaydı; otomatik sayaç değişikliği yapılmadı.")
                 continue
             conn.execute(f"INSERT INTO google_api_usage ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", [row[key] for key in columns])

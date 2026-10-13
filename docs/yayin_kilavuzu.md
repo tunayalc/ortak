@@ -2,14 +2,14 @@
 
 ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışacak kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi, sunucu kabulünün tamamlandığı anlamına gelmez.
 
-## 13 Ekim 2026 Durumu
+## 14 Ekim 2026 Durumu
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 145/145 başarılı; model açılış yüklemesi ve otomatik indirmeyi engelleme testleri eklendi |
+| Backend testleri | 152/152 başarılı; kullanım kaydı birleştirme ve servis bazlı kota kontrolü de test edildi |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| GitHub Actions ve ARM64 imajları | [İş akışı 38461532739](https://github.com/tunayalc/ortak/actions/runs/38461532739) başarılı: test, API ve web ARM64 imaj işleri geçti |
+| GitHub Actions ve ARM64 imajları | [İş akışı 38468540861](https://github.com/tunayalc/ortak/actions/runs/38468540861) başarılı: test, API ve web ARM64 imaj işleri geçti |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
 | GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `cfa3026` commit'i çalışıyor |
 | Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'deki eski `ortak-beta` ve 50 GB boot diski sonlandırıldı. Yalnızca `ortak-beta-yeni` 2 OCPU/12 GB ve yaklaşık 47 GB boot diskiyle çalışıyor. Kısa süreli sunucu örtüşmesinin deneme kredisi kullanımına etkisi fatura ekranından ayrıca kontrol edilmeli |
@@ -17,19 +17,19 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 | Sunucuda Llama 3 8B | İlk soğuk deney 35/36 idi: ilk istek 120,136 saniye. Başarısız rapor ayrı saklandı. Açılış yüklemesinden sonraki gerçek deney 36/36 geçti; en yavaş yanıt 51,756 saniye ve üç konteynerde OOM yok |
 | Canlı tarayıcıda Llama önizlemesi | “Mekân puanı daha önemli olsun, kişiler dengeli kalsın” isteği 70/33/33 kriter ve 1/1/1 kişi ağırlığı önerdi. Önizleme uygulanmadan kapatıldı; Google çağrısı yapılmadı |
 | Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Sağlık kontrolü geçti; ayrı SQLite yedeğinde bütünlük ve 11 satırlık kullanım kaydının guard ile eşleşmesi doğrulandı |
-| Google ve 24 saat gözlem | Google çağrıları kapalı; tam öneri akışı ve 24 saatlik gözlem tamamlanmadı. Eski VM ve boot diski Oracle'da `Terminated` olarak doğrulandı. Yeni HTTPS ve API hazır durumu yeniden 200 döndü |
+| Google ve 24 saat gözlem | Yerel, korumalı pilot gerçek Google ile geçti: 1 Geocoding, 1 Places, 9 Routes; üç kişi ve üç aday için rota matrisi tam. Oracle'da yalnızca `92.5.80.85/32` ve üç API ile sınırlandırılmış ayrı anahtar kuruldu; çağrılar hâlâ kapalı. Sunucu pilotu, genel öneri akışı ve 24 saatlik gözlem tamamlanmadı |
 
-Bu turda yeni ücretli Google Maps API çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
+14 Ekim'de kullanıcı, önceki 10.00 bekleme koşulunu açıkça değiştirerek yerel pilotun hemen başlatılmasını istedi. Onaylı 100 TL sınırıyla 11 gerçek Google isteği yapıldı; yeniden deneme olmadı. Bu, genel doğruluk veya Google faturası hakkında kesin bir iddia değildir. Ücretli sunucu, ödeme işlemi veya ikinci Google pilotu başlatılmadı.
 
 ## Ayrı Yerel Google Pilotu
 
-Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yeni ücretli istek henüz gönderilmedi. Pilot, yeterli kota ve model bağlantısı doğrulanana kadar bekler. Bu izin GitHub erişimini genişletmez ve yerel sonucu Oracle sunucu kabulü yapmaz.
+Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yerel pilot 14 Ekim'de tamamlandı. Kullanıcı, bunun ardından Oracle'da ayrı ve yine en fazla 100 TL'lik ikinci bir pilotu da onayladı; bu ikinci pilot henüz çalıştırılmadı. Yerel sonuç Oracle sunucu kabulü değildir.
 
-13 Ekim'de doğrulanan [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing): Geocoding 0,005 USD, Nearby Search Enterprise 0,035 USD, trafik verili Compute Routes Pro 0,010 USD/istek. Üç kurgusal kişi ve üç aday için 11 normal çağrı 0,13 USD, tüm istekler iki kez yeniden denenirse 33 deneme 0,39 USD eder. [Google Türkiye KDV oranı %20'dir](https://docs.cloud.google.com/billing/docs/resources/vat-overview). [TCMB'nin son yayımlanan bülteni](https://www.tcmb.gov.tr/kurlar/today.xml), 12 Ekim için USD döviz satışını 49,3358 TL gösterdi. Bu TCMB değeri Google'ın fatura kuru değildir.
+14 Ekim çalışması öncesinde yeniden doğrulanan [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing): Geocoding 0,005 USD, Nearby Search Enterprise 0,035 USD, trafik verili Compute Routes Pro 0,010 USD/istek. Üç kurgusal kişi ve üç aday için 11 normal çağrı 0,13 USD, tüm istekler iki kez yeniden denenirse 33 deneme 0,39 USD eder. [Google Türkiye KDV oranı %20'dir](https://docs.cloud.google.com/billing/docs/resources/vat-overview). [TCMB'nin 13 Ekim bülteni](https://www.tcmb.gov.tr/kurlar/today.xml) USD döviz satışını 49,3681 TL gösterdi. Bu TCMB değeri Google'ın fatura kuru değildir.
 
 İhtiyatlı rezervasyonda 60 TL/USD ve ayrıca %25 güvenlik payı kullanıldı: normal 11,70 TL, azami 35,10 TL. Ücretsiz kullanım düşülmedi; gerçek fatura daha düşük veya sıfır olabilir. Rezervasyon banka tahsilatı için kesin tavan değildir. Kaynaklı özel fiyat kaydı ve ön kontrol sonucu GitHub dışında tutulur; çalıştırmadan önce fiyat, kur, vergi ve servis kotaları yeniden doğrulanır.
 
-13 Ekim'de backend'de 22 deneme hakkı kaldı. [Geocoding günlük kotası Pasifik gece yarısında yenilenir](https://developers.google.com/maps/documentation/geocoding/usage-and-billing); sonraki kontrol en erken 14 Ekim 10.00 İstanbul saatidir. Sayaçlar sıfırlanmaz ve kota artırılmaz.
+Yerel pilot öncesi backend'de 33 deneme, Google konsolunda Geocoding 3, Places 3, Routes 27 günlük hak vardı. Pilot sonrası mevcut gün için yerel kalan haklar 22 ve servis bazında 2/2/18 oldu. [Google günlük kotası Pasifik gece yarısında yenilenir](https://developers.google.com/maps/documentation/geocoding/usage-and-billing); ikinci pilot için Google kotaları ile taşınmış backend sayacı birlikte yeniden doğrulanır. Sayaçlar sıfırlanmaz ve kota artırılmaz.
 
 Onaylanan yerel pilot ayrı ve yalnızca `127.0.0.1` üzerinde erişilen geçici backend'de çalıştırılır. Ana uygulamadaki ücretli çağrılar kapalı kalır. Mevcut veritabanı ve guard dosyasının mutlak yolları doğrulanıp aynı kullanım kaydı kullanılır; yeni bir boş veritabanıyla kotayı yeniden başlatmak yasaktır. Geçici backend için `GOOGLE_BUDGET_ENFORCEMENT_ENABLED=true`, `GOOGLE_BUDGET_LIMIT_TL=100`, doğrulanmış birim TL rezervleri ve fiyat kaynakları zorunludur. Bu ayarlar örnek dosyada bulunur; gerçek anahtar paylaşılmaz. Bütçe koruması, fiyat veya guard eksikse test Google'a istek göndermez.
 
@@ -38,7 +38,7 @@ cd backend
 .venv-release/bin/python scripts/evaluate_google_maps.py --api-base http://127.0.0.1:8012 --live --with-llama --max-spend-tl 100
 ```
 
-Bu komut yalnızca son onay, yeterli kota ve korumalı geçici backend hazırken çalıştırılır. Önce mevcut gerçek Llama'nın puan/fiyat/yakınlık ve `2x/1x/1x` tercihi doğrulanır; sonra Google matrisi kurulur ve öneriye uygulanır. Model hazır değilse veya yanlış tercih döndürürse ücretli mekân araması başlamaz. Profil ve kişi tercihi değişikliklerinin ek Google çağrısı üretmemesi ayrıca kontrol edilir. Model kaynağı, süreler, çağrı sayıları, ağırlıklar ve kontrol sonuçları kaydedilir; ham tercih, koordinat ve Google içerikleri kaydedilmez. Oracle'daki Google pilotu bu yerel çalışmanın devamı olarak otomatik yeniden yapılmaz; sunucu üzerinde ücretli tekrar ayrı onay gerektirir.
+Bu komut yalnızca son onay, yeterli kota ve korumalı geçici backend hazırken çalıştırılır. 14 Ekim pilotunda gerçek Llama'nın `2x/1x/1x` kişi ve puan/fiyat/yakınlık tercihi Google aramasından önce doğrulandı. Üç kişi x üç aday için tam dokuz Google rotası alındı. Profil ve kişi tercihi değişiklikleri ek çağrı üretmedi; 13/13 kontrol geçti. Test raporu GitHub dışındaki `output/google_maps/local-approved-20261014-early/` dizinindedir. Ham tercih, koordinat ve Google içerikleri kaydedilmez. Toplam kullanım kaydı 22 satırdır ve guard ile eşleşir; 46,35 TL tüm kayıtlar için ayrılmış ihtiyatlı maliyettir, fatura tutarı değildir. Oracle pilotu ayrı onaylanmıştır ancak servis kotası ve ortak kullanım kaydı yeterli olmadan başlatılmaz.
 
 ## Tercihten konuma dayalı aramaya geçiş
 
@@ -88,13 +88,13 @@ cd backend
 .venv-release/bin/python scripts/backup_database.py export-ledger ../output/deployment/ledger.json
 ```
 
-Özel dosya güvenilir SSH üzerinden sunucunun `deploy/private/` dizinine aktarılır. Dizin yöneticiye ait ve `0700`, kaynak dosya `0600` kalır. API başlatılmadan önce ledger içeri alınır:
+Özel dosya güvenilir SSH üzerinden sunucunun `deploy/private/` dizinine aktarılır. Dizin yöneticiye ait ve `0700`, kaynak dosya `0600` kalır. Google çağrıları kapalıyken ve API konteyneri çalışırken ledger içeri alınır:
 
 ```bash
 sudo python3 operations.py import-ledger --ledger private/ledger.json
 ```
 
-Bu komut yalnızca ledger kopyasını içeren geçici bir dizini API'nin `10001` kullanıcısına verir ve `/transfer:ro` olarak bağlar. Özel dizinin tamamı, sağlık kayıtları veya sürüm dosyaları API'ye açılmaz. Başarıda ve hatada geçici kopya kaldırılır; asıl aktarım dosyası saklanır. Aktarım kaydı uygulama imajına eklenmez ve Google çağrıları açılmaz. Kullanım geçmişi gerçekten yoksa `initialize-empty-ledger` yalnızca ilk kurulumda kullanılabilir. Mevcut guard veya kullanım kaydı varken yeniden başlatma olarak kullanılamaz. Guard ayrı dizinde tutulur; veritabanı kaybolur veya eski yedeğe dönerse Google çağrıları kapanır. Guard kaybolursa otomatik yeniden oluşturulmaz; eski kayıtlar ve Cloud Billing uzlaştırılır.
+Bu komut özel kaynağın yalnızca geçici kopyasını, erişimi `10001` kullanıcısıyla sınırlı `/backups` dizinine koyar ve çalışan API konteynerinde içe alır. Ayrı konteyner veya çakışan statik IP oluşturulmaz. Başarıda ve hatada geçici kopya kaldırılır; asıl aktarım dosyası saklanır. Eski kayıtlardaki boş maliyet rezervi yalnızca diğer tüm alanlar eşitse ve yeni değer pozitifse tamamlanır; başka çakışma tüm işlemi durdurur. Aktarım kaydı uygulama imajına eklenmez ve Google çağrıları açılmaz. Kullanım geçmişi gerçekten yoksa `initialize-empty-ledger` yalnızca ilk kurulumda kullanılabilir. Mevcut guard veya kullanım kaydı varken yeniden başlatma olarak kullanılamaz. Guard ayrı dizinde tutulur; veritabanı kaybolur veya eski yedeğe dönerse Google çağrıları kapanır. Guard kaybolursa otomatik yeniden oluşturulmaz; eski kayıtlar ve Cloud Billing uzlaştırılır.
 
 Anahtar yalnızca üç Google API'sine ve sunucunun çıkış IP'sine sınırlandırılır. Ana yerel uygulamadaki ücretli çağrılar kapalı kalır; tek onaylı yerel pilot yalnızca yukarıdaki ayrı, korumalı süreçte çalışabilir. Normal sağlık kontrolü Google'a istek göndermez. Genel günlük 33 deneme yanında Geocoding toplam 3, Nearby Search 3, Routes 27 sınırı backend'de de uygulanır. Başarısız ve yeniden denenen istekler de sayılır.
 

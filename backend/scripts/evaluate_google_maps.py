@@ -69,7 +69,7 @@ def save_report(report: dict, directory: Path) -> None:
         "- Kaynak kodu ve bağımlılık sürümleri: `source.tar.gz` (anahtar ve veritabanı içermez).",
         f"- Gerçek Google HTTP çağrısı: {sum(stage.get('google_calls', 0) for stage in stages)}",
         f"- Onaylanan test bütçesi (TL): {report.get('authorized_test_limit_tl') or 'Henüz onaylanmadı'}",
-        "- Planlanan çağrı / azami deneme: 11 / 33; yerel sayaç diğer uygulamaların kullanımını sınırlamaz.",
+        f"- Planlanan çağrı / azami deneme: 11 / {report['maximum_google_attempts']}; yerel sayaç diğer uygulamaların kullanımını sınırlamaz.",
         f"- Neden: {report.get('reason') or 'Kontroller tamamlandı.'}", "",
         "| Aşama | HTTP | Süre (sn) | Google çağrısı | Yeniden deneme |",
         "| --- | ---: | ---: | ---: | ---: |",
@@ -95,7 +95,7 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
         "planned_google_calls": 11,
         "maximum_google_attempts": 33,
         "pricing_reference": "https://developers.google.com/maps/billing-and-pricing/pricing",
-        "estimated_list_cost_usd_before_tax_credits": {"normal": 0.13, "all_requests_retried_twice": 0.39},
+        "estimated_list_cost_usd_before_tax_credits": {"normal": 0.13, "maximum_configured_attempts": 0.39},
         "cost_estimate_note": "Google liste fiyatları: Geocoding 0.005 USD, Nearby Search Enterprise 0.035 USD, trafik verili Compute Routes Pro 0.010 USD/istek. Fatura tutarı değildir; kur, vergi ve ücretsiz kullanım ayrıca doğrulanır. Yerel çağrı sayacı parasal bir üst sınır değildir.",
         "source_archive": "source.tar.gz",
     }
@@ -132,7 +132,13 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
             report["health"] = {key: health.get(key) for key in ("status", "google_configured", "google_status", "google_services", "google_usage", "ai_provider", "ai_model", "ai_ready")}
             usage = health.get("google_usage", {})
             service_remaining = runtime.get("google_service_remaining") if api_base.startswith("https://") else usage.get("service_remaining")
-            required_service_attempts = {"geocoding": 3, "places": 3, "routes": 27}
+            attempts = usage.get("max_attempts_per_request", 3)
+            valid_attempts = type(attempts) is int and 1 <= attempts <= 3
+            maximum_attempts = 11 * attempts if valid_attempts else 33
+            required_service_attempts = {"geocoding": attempts, "places": attempts, "routes": 9 * attempts} if valid_attempts else {}
+            report.update(maximum_google_attempts=maximum_attempts, max_attempts_per_request=attempts)
+            if valid_attempts:
+                report["estimated_list_cost_usd_before_tax_credits"]["maximum_configured_attempts"] = round(0.13 * attempts, 2)
             if not health.get("google_configured"):
                 report.update(status="blocked", reason="GOOGLE_MAPS_API_KEY tanımlı değil; canlı Google testi yapılmadı.")
             elif not live:
@@ -140,13 +146,15 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
             elif spending_limit_tl is None or not math.isfinite(spending_limit_tl) or not 0 < spending_limit_tl <= 100:
                 report.update(status="blocked", reason="Canlı test için kullanıcının onayladığı vergi dâhil test bütçesi --max-spend-tl ile belirtilmelidir.")
             elif not health.get("google_usage", {}).get("calls_enabled"):
-                report.update(status="blocked", reason="Google Maps çağrıları uygulamada kapalı; faturalandırma/harcama onayı bekleniyor.")
+                report.update(status="blocked", reason="Google Maps çağrıları uygulamada kapalı; ücretli test başlatılmadı.")
+            elif not valid_attempts:
+                report.update(status="blocked", reason="Backend'in yeniden deneme sınırı doğrulanamadı; ücretli istek gönderilmedi.")
             elif usage.get("budget_enforced") is not True or not isinstance(usage.get("budget_limit_tl"), (int, float)) or not 0 < usage["budget_limit_tl"] <= spending_limit_tl:
                 report.update(status="blocked", reason="Backend kalıcı bütçe koruması açık ve onaylı test bütçesiyle sınırlı olmalıdır; ücretli istek gönderilmedi.")
             elif usage.get("available") is not True:
                 report.update(status="blocked", reason="Backend bütçe, fiyat veya kullanım kaydı kontrolü geçmedi; ücretli istek gönderilmedi.")
-            elif health.get("google_usage", {}).get("remaining_today", runtime.get("google_remaining_requests", 0)) < 33:
-                report.update(status="blocked", reason="Yeniden denemeler dâhil 33 isteklik güvenli test için günlük yerel kota yetersiz.")
+            elif health.get("google_usage", {}).get("remaining_today", runtime.get("google_remaining_requests", 0)) < maximum_attempts:
+                report.update(status="blocked", reason=f"Yeniden denemeler dâhil {maximum_attempts} isteklik test için günlük yerel kota yetersiz.")
             elif not isinstance(service_remaining, dict) or any(
                 type(service_remaining.get(key)) is not int or service_remaining[key] < count
                 for key, count in required_service_attempts.items()
@@ -222,7 +230,7 @@ async def evaluate(api_base: str, live: bool, output: Path, spending_limit_tl: f
                 report["checks"]["baseline_methods"] = len(experiment["baselines"]) == 5
                 report["checks"]["google_call_metadata"] = sum(item["google_calls"] for item in report["stages"]) >= 11
                 report["checks"]["no_extra_google_calls_for_preferences"] = all(item["google_calls"] == 0 for item in report["stages"] if item["stage"].startswith(("profile_", "lambda_", "llama_")) or item["stage"] == "baseline_comparison")
-                report["checks"]["attempt_limit"] = sum(item["google_calls"] for item in report["stages"]) <= 33
+                report["checks"]["attempt_limit"] = sum(item["google_calls"] for item in report["stages"]) <= maximum_attempts
                 report["live_google_verified"] = all(report["checks"].values())
                 report["status"] = "passed" if report["live_google_verified"] else "failed"
         except (httpx.HTTPError, ValueError, KeyError, TypeError, RuntimeError, ValidationError) as exc:

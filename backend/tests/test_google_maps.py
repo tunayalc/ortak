@@ -137,3 +137,22 @@ def test_quota_retry_records_real_attempts_without_payload(monkeypatch):
     assert sleeps == [0.5]
     assert [event["http_status"] for event in events] == [429, 200]
     assert "coordinate-must-not-be-logged" not in json.dumps(events)
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3])
+def test_retry_limit_stops_network_and_ledger_at_configured_attempt(monkeypatch, limit):
+    monkeypatch.setenv("GOOGLE_MAPS_MAX_ATTEMPTS", str(limit))
+    get_settings.cache_clear()
+    requests = []
+    def unavailable(request):
+        requests.append(request)
+        return httpx.Response(503, json={})
+    async def no_sleep(_):
+        pass
+    mock_transport(monkeypatch, unavailable)
+    monkeypatch.setattr(google_transport.asyncio, "sleep", no_sleep)
+    with pytest.raises(RuntimeError, match="HTTP 503"):
+        asyncio.run(google_transport.google_request(google_maps.GOOGLE_PLACES_URL, {}, "places_nearby_new", http_method="POST"))
+    assert len(requests) == limit
+    with get_conn() as conn:
+        assert [row["attempt"] for row in conn.execute("SELECT attempt FROM google_api_usage ORDER BY id")] == list(range(1, limit + 1))

@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     google_maps_api_key: Optional[str] = Field(default=None, alias="GOOGLE_MAPS_API_KEY")
     google_maps_calls_enabled: bool = Field(default=False, alias="GOOGLE_MAPS_CALLS_ENABLED")
     google_maps_daily_call_limit: int = Field(default=33, ge=0, alias="GOOGLE_MAPS_DAILY_CALL_LIMIT")
+    google_maps_max_attempts: int = Field(default=3, ge=1, le=3, alias="GOOGLE_MAPS_MAX_ATTEMPTS")
     openai_api_key: Optional[str] = Field(default=None, alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o-mini", alias="OPENAI_MODEL")
     llm_provider: Literal["ollama", "openai", "disabled"] = Field(default="ollama", alias="LLM_PROVIDER")

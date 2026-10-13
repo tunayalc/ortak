@@ -61,6 +61,7 @@ def usage_status() -> dict[str, object]:
     status = {
         "calls_enabled": settings.google_maps_calls_enabled,
         "daily_limit": settings.google_maps_daily_call_limit,
+        "max_attempts_per_request": settings.google_maps_max_attempts,
         "used_today": used,
         "remaining_today": max(0, settings.google_maps_daily_call_limit - used),
         "usage_day": day,

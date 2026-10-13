@@ -176,14 +176,16 @@ def test_unavailable_llama_stops_before_google_work(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("model", ["llama3:8b", "qwen2.5:3b"])
-def test_mocked_llama_workflow_and_preference_reuse(monkeypatch, tmp_path, model):
+@pytest.mark.parametrize("attempts", [2, 3])
+def test_mocked_llama_workflow_and_preference_reuse(monkeypatch, tmp_path, model, attempts):
     requests = []
     def handler(request):
         path = request.url.path
         body = json.loads(request.content) if request.method == "POST" else {}
         requests.append(path)
         if path == "/health":
-            return httpx.Response(200, json=healthy())
+            return httpx.Response(200, json=healthy(max_attempts_per_request=attempts, remaining_today=11 * attempts,
+                service_remaining={"geocoding": attempts, "places": attempts, "routes": 9 * attempts}))
         if path == "/preferences/interpret":
             assert all(set(person) == {"id", "label", "delta_weight"} for person in body["participants"])
             return httpx.Response(200, json={"source": "ollama", "model": model,
@@ -218,8 +220,28 @@ def test_mocked_llama_workflow_and_preference_reuse(monkeypatch, tmp_path, model
     else:
         assert report["status"] == "passed"
         assert report["checks"]["llama_applied"] is True
+        assert report["maximum_google_attempts"] == 11 * attempts
         assert report["checks"]["no_extra_google_calls_for_preferences"] is True
         assert sum(item["google_calls"] for item in report["stages"]) == 11
         assert "/scenarios/fictional" in requests
         assert "text" not in report["llama"]
         assert "Kurgusal test cevabı." not in json.dumps(report)
+
+
+@pytest.mark.parametrize("limits", [
+    {"remaining_today": 21},
+    {"service_remaining": {"geocoding": 2, "places": 2, "routes": 17}},
+    {"max_attempts_per_request": 4},
+    {"max_attempts_per_request": True},
+])
+def test_reduced_retry_pilot_still_fails_closed_on_insufficient_or_invalid_limits(monkeypatch, tmp_path, limits):
+    requests = []
+    def handler(request):
+        requests.append(request.url.path)
+        usage = {"max_attempts_per_request": 2, "remaining_today": 22,
+                 "service_remaining": {"geocoding": 2, "places": 2, "routes": 18}, **limits}
+        return httpx.Response(200, json=healthy(**usage))
+    install_mock(monkeypatch, handler)
+    report = asyncio.run(evaluate_google_maps.evaluate("http://127.0.0.1:8000", True, tmp_path, 100, True))
+    assert report["status"] == "blocked"
+    assert requests == ["/health"]

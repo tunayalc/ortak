@@ -37,7 +37,9 @@ async def google_request(
     field_mask: str | None = None,
     http_method: str = "GET",
 ) -> dict[str, Any]:
-    key = get_settings().google_maps_api_key
+    settings = get_settings()
+    key = settings.google_maps_api_key
+    max_attempts = settings.google_maps_max_attempts
     if not key:
         raise RuntimeError("Google Maps API anahtarı tanımlı değil.")
     headers = {"X-Goog-Api-Key": key}
@@ -45,7 +47,7 @@ async def google_request(
         headers["X-Goog-FieldMask"] = field_mask
     # Google content is held in the active scenario, never in permanent api_cache.
     async with httpx.AsyncClient(timeout=httpx.Timeout(20, connect=5), trust_env=False) as client:
-        for attempt in range(3):
+        for attempt in range(max_attempts):
             call_id = reserve_call(operation, attempt + 1)
             started = time.perf_counter()
             event: dict[str, Any] = {
@@ -100,7 +102,7 @@ async def google_request(
                 finish_call(call_id, event)
             if result is not None:
                 return result
-            if not retry or attempt == 2:
+            if not retry or attempt + 1 == max_attempts:
                 raise RuntimeError(error) from None
             await asyncio.sleep(0.5 * (2**attempt))
     raise RuntimeError("Google Maps isteği tamamlanamadı.")

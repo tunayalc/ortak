@@ -23,6 +23,8 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 ## Ayrı Yerel Google Pilotu
 
+Oracle pilotunu mevcut kotayla çalıştırmak için `GOOGLE_MAPS_MAX_ATTEMPTS=2` kullanılabilir. Bu ayar her Google isteğini en fazla iki denemeyle sınırlar; pilotun en kötü durumda 22 deneme ve 2 Geocoding / 2 Places / 18 Routes hakkı gerekir. İhtiyatlı azami rezerv 23,40 TL'dir. Varsayılan üç denemede 33 ve 3/3/27 gereksinimi korunur. Günlük kota, bütçe ve kullanım kaydı değişmez; test ön kontrolü gerçek backend tekrar sınırını kullanır.
+
 Kullanıcı, mevcut Ollama `llama3:8b` modeliyle yalnızca Google Maps için en fazla 100 TL kapsamını seçti ve aşağıdaki maliyet tahminiyle tek yerel pilotu onayladı; ücretli model barındırma seçilmedi. Yerel pilot 14 Ekim'de tamamlandı. Kullanıcı, bunun ardından Oracle'da ayrı ve yine en fazla 100 TL'lik ikinci bir pilotu da onayladı; bu ikinci pilot henüz çalıştırılmadı. Yerel sonuç Oracle sunucu kabulü değildir.
 
 14 Ekim çalışması öncesinde yeniden doğrulanan [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing): Geocoding 0,005 USD, Nearby Search Enterprise 0,035 USD, trafik verili Compute Routes Pro 0,010 USD/istek. Üç kurgusal kişi ve üç aday için 11 normal çağrı 0,13 USD, tüm istekler iki kez yeniden denenirse 33 deneme 0,39 USD eder. [Google Türkiye KDV oranı %20'dir](https://docs.cloud.google.com/billing/docs/resources/vat-overview). [TCMB'nin 13 Ekim bülteni](https://www.tcmb.gov.tr/kurlar/today.xml) USD döviz satışını 49,3681 TL gösterdi. Bu TCMB değeri Google'ın fatura kuru değildir.

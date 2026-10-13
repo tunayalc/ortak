@@ -9,7 +9,7 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 | Backend testleri | 128/128 başarılı; özel ledger aktarımında izin ve hata temizliği doğrulandı |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| Yerel ARM64 API ve web imajları | Önceki sürüm derlendi; son tercih akışının web imajı yeniden hazırlanacak. Caddy ve Compose yapılandırması doğrulandı |
+| Yerel ARM64 API ve web imajları | Son tercih akışının `b57bab0` web imajı derlendi; Caddy, `/api` bağlantısı ve özel dosya yokluğu doğrulandı. API yapılandırma dosyası kaynakla aynı. GitHub Actions / GHCR kabulü bekliyor |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
 | GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
 | Oracle hesabı ve ücretsiz kapasite | Konsol erişimi doğrulanmadı; kaynak oluşturulmadı |

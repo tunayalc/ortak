@@ -1,0 +1,9 @@
+[Unit]
+Description=ORTAK read-only production health check
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ortak/deploy
+ExecStart=/usr/bin/python3 /opt/ortak/deploy/operations.py health
+UMask=0077

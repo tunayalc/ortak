@@ -1,0 +1,23 @@
+{
+    admin off
+}
+
+{$PUBLIC_HOST} {
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+        Strict-Transport-Security "max-age=31536000"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://*.googleusercontent.com https://*.gstatic.com; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        -Server
+    }
+    encode zstd gzip
+    handle_path /api/* {
+        reverse_proxy api:8000
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

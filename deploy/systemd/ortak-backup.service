@@ -1,0 +1,9 @@
+[Unit]
+Description=ORTAK private consistent SQLite backup
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ortak/deploy
+ExecStart=/usr/bin/python3 /opt/ortak/deploy/operations.py backup
+UMask=0077

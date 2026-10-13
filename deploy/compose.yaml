@@ -1,0 +1,72 @@
+name: ortak
+services:
+  web:
+    image: ${ORTAK_WEB_IMAGE:?Set a tested web image digest}
+    platform: linux/arm64
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?Set the public hostname}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes: ["caddy_data:/data", "caddy_config:/config"]
+    networks:
+      public:
+        ipv4_address: 172.30.0.2
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: &logging
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+  api:
+    image: ${ORTAK_API_IMAGE:?Set a tested API image digest}
+    platform: linux/arm64
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/ortak.db
+      OLLAMA_BASE_URL: http://ollama:11434
+      APP_ENVIRONMENT: production
+      LLM_PROVIDER: ollama
+      OLLAMA_MODEL: llama3:8b
+      GOOGLE_LEDGER_WATERMARK_PATH: /guard/google-watermark.json
+    volumes: ["./data:/data", "./guard:/guard", "./backups:/backups"]
+    networks: [public, model]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; h=os.environ['PUBLIC_BASE_URL'].split('://')[1]; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/readyz',headers={'Host':h}),timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    mem_limit: 768m
+    logging: *logging
+  ollama:
+    image: ${OLLAMA_IMAGE:?Set a verified ARM64 Ollama image digest}
+    platform: linux/arm64
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_MAX_QUEUE: "1"
+      OLLAMA_CONTEXT_LENGTH: "2048"
+      OLLAMA_KEEP_ALIVE: 5m
+    volumes: ["ollama_models:/root/.ollama"]
+    networks: [model, egress]
+    restart: unless-stopped
+    mem_limit: 9g
+    logging: *logging
+networks:
+  public:
+    ipam:
+      config: [{subnet: 172.30.0.0/24}]
+  model:
+    internal: true
+  egress: {}
+volumes:
+  ollama_models: {}
+  caddy_data: {}
+  caddy_config: {}

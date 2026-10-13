@@ -1,0 +1,25 @@
+**/.env
+**/.env.*
+**/.venv*
+**/node_modules
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/*.db*
+**/*.sqlite*
+**/*.pem
+**/*.key
+.git
+.playwright-cli
+output
+belge
+Resmi belgeler*
+docs/google_maps_canli_test.md
+docs/rapor_duzeltme_notlari.md
+deploy/backups
+deploy/private
+**/*.pdf
+**/*.docx
+**/*.xlsx
+**/*.zip
+**/*.tar.gz

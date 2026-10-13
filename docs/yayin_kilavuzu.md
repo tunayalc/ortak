@@ -6,16 +6,24 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 125/125 başarılı |
-| Mobil ve masaüstü arayüz testleri | 14/14 başarılı; 390 ve 1440 piksel, açık/koyu tema |
+| Backend testleri | 128/128 başarılı; özel ledger aktarımında izin ve hata temizliği doğrulandı |
+| Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| Yerel ARM64 API ve web imajları | Derlendi; Caddy ve Compose yapılandırması doğrulandı |
+| Yerel ARM64 API ve web imajları | Önceki sürüm derlendi; son tercih akışının web imajı yeniden hazırlanacak. Caddy ve Compose yapılandırması doğrulandı |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
 | GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
 | Oracle hesabı ve ücretsiz kapasite | Konsol erişimi doğrulanmadı; kaynak oluşturulmadı |
 | Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
 
 Bu turda yeni Google çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
+
+## Tercihten konuma dayalı aramaya geçiş
+
+Modelin önerdiği kriter ve kişi ağırlıkları önce düzenlenebilir önizlemede gösterilir. “Uygula ve mekânları bul” onayı, kişi konumu alanlarıyla birlikte öneri akışını başlatır. Model konum bağlantılarını veya koordinatları almaz; yalnızca anonim kişi kimlikleri ve seçim tercihiyle çalışır. Mekân bulma, rota ve sıralama işlemlerini doğrulanmış uygulama kodu yürütür.
+
+Konumlar ve arama alanları değişmemişse tamamlanmış rota matrisi yeniden kullanılır. Yalnızca kriter veya kişi ağırlığı değişikliği yeni Google isteği üretmez. Konum, şehir veya kategori değişirse eski öneriler kaldırılır; yeni arama kullanıcı onayı gerektirir. Arama sürerken konum değişirse sonraki aşamalar durdurulur ve eski sonuç güncelmiş gibi gösterilmez. Üretimde Google kullanımı kapalıysa yeni arama engellenir; manuel tercih düzenleme kullanılabilir.
+
+Bu akışın arayüz testleri kurgusal model önerileri ve Google kullanılmayan test backend'iyle çalışır. İnternet üzerinden erişilebilir Llama, gerçek Google ve sunucu kabulü yerine geçmez. Kullanıcının ücretli deneme talebinde Google Maps kullanımı ile Google Cloud'da Llama barındırma ayrı maliyet kalemleridir. Kapsam, güncel fiyat ve bütçe netleşmeden ücretli sunucu veya yeni Google pilotu başlatılmaz; önceki 100 TL pilot sınırı artırılmaz.
 
 ## Ücretsiz kaynak ve erişim
 
@@ -45,13 +53,13 @@ cd backend
 .venv-release/bin/python scripts/backup_database.py export-ledger ../output/deployment/ledger.json
 ```
 
-Özel dosya güvenilir SSH üzerinden sunucunun `deploy/private/` dizinine aktarılır. API başlatılmadan önce Compose tek seferlik konteynerinde ledger içeri alınır:
+Özel dosya güvenilir SSH üzerinden sunucunun `deploy/private/` dizinine aktarılır. Dizin yöneticiye ait ve `0700`, kaynak dosya `0600` kalır. API başlatılmadan önce ledger içeri alınır:
 
 ```bash
-docker compose run --rm --no-deps -v "$(pwd)/private:/transfer:ro" api python scripts/backup_database.py import-ledger /transfer/ledger.json
+sudo python3 operations.py import-ledger --ledger private/ledger.json
 ```
 
-Bu komut için `deploy/private` geçici olarak `/transfer:ro` bağlanır; aktarım kaydı uygulama imajına eklenmez. Kullanım geçmişi gerçekten yoksa `initialize-empty-ledger` yalnızca ilk kurulumda kullanılabilir. Mevcut guard veya kullanım kaydı varken yeniden başlatma olarak kullanılamaz. Guard ayrı dizinde tutulur; veritabanı kaybolur veya eski yedeğe dönerse Google çağrıları kapanır. Guard kaybolursa otomatik yeniden oluşturulmaz; eski kayıtlar ve Cloud Billing uzlaştırılır.
+Bu komut yalnızca ledger kopyasını içeren geçici bir dizini API'nin `10001` kullanıcısına verir ve `/transfer:ro` olarak bağlar. Özel dizinin tamamı, sağlık kayıtları veya sürüm dosyaları API'ye açılmaz. Başarıda ve hatada geçici kopya kaldırılır; asıl aktarım dosyası saklanır. Aktarım kaydı uygulama imajına eklenmez ve Google çağrıları açılmaz. Kullanım geçmişi gerçekten yoksa `initialize-empty-ledger` yalnızca ilk kurulumda kullanılabilir. Mevcut guard veya kullanım kaydı varken yeniden başlatma olarak kullanılamaz. Guard ayrı dizinde tutulur; veritabanı kaybolur veya eski yedeğe dönerse Google çağrıları kapanır. Guard kaybolursa otomatik yeniden oluşturulmaz; eski kayıtlar ve Cloud Billing uzlaştırılır.
 
 Anahtar yalnızca üç Google API'sine ve sunucunun çıkış IP'sine sınırlandırılır. Yereldeki ücretli çağrılar kapalı kalır. Normal sağlık kontrolü Google'a istek göndermez. Genel günlük 33 deneme yanında Geocoding toplam 3, Nearby Search 3, Routes 27 sınırı backend'de de uygulanır. Başarısız ve yeniden denenen istekler de sayılır.
 

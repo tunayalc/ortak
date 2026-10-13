@@ -3,6 +3,7 @@ from datetime import timedelta
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 
 import pytest
@@ -15,6 +16,9 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from scripts.backup_database import backup, export_ledger, import_ledger
 from scripts.deployment_state import DeploymentState, utcnow
 from test_public_release import production
+
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from deploy import operations
 
 
 def test_empty_price_timestamp_allows_disabled_initial_setup():
@@ -119,3 +123,49 @@ def test_backup_and_transfer_preserve_usage_only(production, tmp_path, monkeypat
     assert google_usage.usage_status()["used_today"] == 1
     with get_conn() as conn:
         assert conn.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("fail", [False, True])
+def test_ledger_transfer_only_exposes_private_copy_and_always_cleans_up(tmp_path, monkeypatch, fail):
+    source = tmp_path / "ledger.json"
+    original = '{"version": 1, "usage": []}'
+    source.write_text(original)
+    monkeypatch.setattr(operations, "ROOT", tmp_path)
+    monkeypatch.setattr(operations, "configuration", lambda: {})
+    monkeypatch.setattr(operations.os, "geteuid", lambda: 0)
+    ownership = []
+    monkeypatch.setattr(operations.os, "chown", lambda path, uid, gid: ownership.append((Path(path), uid, gid)))
+    mounts = []
+
+    def compose(*args, **kwargs):
+        directory, target, access = args[args.index("-v") + 1].split(":")
+        directory = Path(directory)
+        mounts.append(directory)
+        assert target == "/transfer" and access == "ro"
+        assert directory != tmp_path / "private"
+        assert args[:3] == ("run", "--rm", "--no-deps")
+        assert args[-4:] == ("python", "scripts/backup_database.py", "import-ledger", "/transfer/ledger.json")
+        assert (directory / "ledger.json").read_text() == original
+        assert directory.stat().st_mode & 0o777 == 0o700
+        assert (directory / "ledger.json").stat().st_mode & 0o777 == 0o600
+        assert set(ownership) == {(directory, 10001, 10001), (directory / "ledger.json", 10001, 10001)}
+        if fail:
+            raise subprocess.CalledProcessError(1, "docker", stderr="private diagnostic")
+
+    monkeypatch.setattr(operations, "compose", compose)
+    if fail:
+        with pytest.raises(subprocess.CalledProcessError):
+            operations.import_ledger(source)
+    else:
+        operations.import_ledger(source)
+    assert len(mounts) == 1
+    assert not mounts[0].exists()
+    assert source.read_text() == original
+    assert (tmp_path / "private").stat().st_mode & 0o777 == 0o700
+
+
+def test_ledger_transfer_requires_root_before_docker_or_file_access(monkeypatch, tmp_path):
+    monkeypatch.setattr(operations.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(operations, "configuration", lambda: pytest.fail("No Docker call before UID validation"))
+    with pytest.raises(ValueError, match="sudo"):
+        operations.import_ledger(tmp_path / "missing.json")

@@ -365,6 +365,10 @@ function PreferenceAssistant({
   participants,
   onInterpret,
   onApply,
+  onApplyAndFind,
+  canFind,
+  reusesRoutes,
+  googleConfigured,
   onDiscard,
   busy,
 }) {
@@ -394,6 +398,7 @@ function PreferenceAssistant({
     (suggestion.min_rating === null || (suggestion.min_rating >= 0 && suggestion.min_rating <= 5)) &&
     (suggestion.max_duration_minutes === null || suggestion.max_duration_minutes >= 1)
   )
+  const validSuggestion = criteriaTotal > 0 && criteriaValid && personWeightsValid && constraintsValid
   const updateCriterion = (key, value) => onChangeSuggestion((current) => ({
     ...current,
     criterion_weights: { ...current.criterion_weights, [key]: Number(value) },
@@ -466,9 +471,11 @@ function PreferenceAssistant({
           {criteriaTotal <= 0 && <p className="review-warning">En az bir kriter ağırlığı sıfırdan büyük olmalıdır.</p>}
           {suggestion.warnings.map((warning, index) => <p className="review-warning" key={index}>{warning}</p>)}
           <div className="review-actions">
-            <button className="primary" onClick={onApply} disabled={Boolean(busy) || criteriaTotal <= 0 || !criteriaValid || !personWeightsValid || !constraintsValid}><CheckCircle2 size={16} /> Değerleri uygula</button>
+            <button className="primary" onClick={onApplyAndFind} disabled={Boolean(busy) || !validSuggestion || !canFind}><Play size={16} /> Uygula ve mekânları bul</button>
+            <button className="secondary" onClick={onApply} disabled={Boolean(busy) || !validSuggestion}><CheckCircle2 size={16} /> Değerleri uygula</button>
             <button className="secondary" onClick={onDiscard} disabled={Boolean(busy)}>Vazgeç</button>
           </div>
+          <p className="privacy-note">Konumlar modele gönderilmez. {reusesRoutes ? 'Mevcut rotalar kullanılır; yeni Google isteği gönderilmez.' : googleConfigured ? 'Yeni mekân ve rota araması Google API kullanım ücreti doğurabilir.' : 'Google bağlantısı doğrulanmadan gerçek Google sonucu gösterilmez.'}</p>
         </div>
       )}
     </section>
@@ -901,8 +908,10 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(null)
   const [checkingAi, setCheckingAi] = useState(false)
   const intentVersion = useRef(0)
+  const pipelineInFlight = useRef(false)
   const [scenarioForm, setScenarioForm] = useState(initialScenario)
   const [scenario, setScenario] = useState(null)
+  const [scenarioContext, setScenarioContext] = useState(null)
   const [inputMode, setInputMode] = useState('synthetic')
   const [participantLocations, setParticipantLocations] = useState(() => makeParticipantRows(initialScenario.group_size))
   const [parsedLocations, setParsedLocations] = useState([])
@@ -941,6 +950,27 @@ export default function App() {
     label: participant.label || `Katılımcı ${index + 1}`,
     delta_weight: Number(participant.delta_weight),
   }))
+  // Preference edits can reuse routes; changed locations or search inputs cannot.
+  const searchContext = JSON.stringify({
+    scenarioForm,
+    inputMode,
+    participants: inputMode === 'link' ? participantLocations.map(({ label, value }) => ({ label, value })) : null,
+  })
+  const currentSearchContext = useRef(searchContext)
+  currentSearchContext.current = searchContext
+  const canReuseRoutes = Boolean(scenario && response && scenarioContext === searchContext)
+  const canStartSearch = Boolean(runtimeConfig && (
+    runtimeConfig.google_available || (!runtimeConfig.production && health?.google_configured === false)
+  ))
+
+  useEffect(() => {
+    if (scenarioContext !== null && scenarioContext !== searchContext) {
+      setResponse(null)
+      setSelectedId(null)
+      setExperiment(null)
+      setCounts({ candidates: 0, routes: 0 })
+    }
+  }, [scenarioContext, searchContext])
 
   useEffect(() => {
     refreshAiStatus()
@@ -1012,7 +1042,7 @@ export default function App() {
     setParsedLocations([])
     setIntentSuggestion(null)
     setAiApplied(false)
-    if (scenario) {
+    if (canReuseRoutes) {
       refreshRecommendations({ participantWeights: Object.fromEntries(scenario.users.map((user) => [user.id, 1])) })
     }
   }
@@ -1039,7 +1069,7 @@ export default function App() {
     }
   }
 
-  function applyIntentSuggestion() {
+  async function applyIntentSuggestion(findPlaces = false) {
     if (!intentSuggestion) return
     const nextWeights = intentSuggestion.criterion_weights
     const nextPersonWeights = intentSuggestion.participant_proximity_weights
@@ -1055,13 +1085,16 @@ export default function App() {
     setMaxDuration(nextMaxDuration)
     setAiApplied(true)
     setIntentSuggestion(null)
-    if (scenario) {
-      refreshRecommendations({
-        criterionWeights: nextWeights,
-        participantWeights: nextPersonWeights,
-        minRating: nextMinRating,
-        maxDuration: nextMaxDuration,
-      })
+    const overrides = {
+      criterionWeights: nextWeights,
+      participantWeights: nextPersonWeights,
+      minRating: nextMinRating,
+      maxDuration: nextMaxDuration,
+    }
+    if (canReuseRoutes) {
+      await refreshRecommendations(overrides)
+    } else if (findPlaces && canStartSearch) {
+      await runPipeline(overrides)
     }
   }
 
@@ -1085,7 +1118,7 @@ export default function App() {
       }
       return result
     } finally {
-      setBusy('')
+      if (!pipelineInFlight.current) setBusy('')
     }
   }
 
@@ -1168,7 +1201,7 @@ export default function App() {
     }
   }
 
-  async function buildScenarioPayload() {
+  async function buildScenarioPayload(overrides = {}) {
     if (inputMode !== 'link') {
       return {
         ...scenarioForm,
@@ -1182,11 +1215,21 @@ export default function App() {
       group_size: participantLocations.length,
       input_mode: 'link',
       session_only: true,
-      participant_locations: participantLocations,
+      participant_locations: participantLocations.map((person, index) => ({
+        ...person,
+        delta_weight: overrides.participantWeights?.[`user-${index + 1}`] ?? person.delta_weight,
+      })),
     }
   }
 
   async function runPipeline(overrides = {}) {
+    if (!canStartSearch || busy || pipelineInFlight.current) return
+    pipelineInFlight.current = true
+    const ensureUnchangedInputs = () => {
+      if (currentSearchContext.current !== searchContext) {
+        throw new Error('Konumlar veya arama alanları değişti; işlem durduruldu. Güncel bilgilerle yeniden arayın.')
+      }
+    }
     setError('')
     setExperiment(null)
     setResponse(null)
@@ -1198,9 +1241,14 @@ export default function App() {
         await api.deleteScenario(scenario.id).catch(() => {})
         setScenario(null)
       }
-      const created = await api.createScenario(await buildScenarioPayload())
+      const payload = await buildScenarioPayload(overrides)
+      ensureUnchangedInputs()
+      setBusy('scenario')
+      const created = await api.createScenario(payload)
       setScenario(created)
+      setScenarioContext(searchContext)
 
+      ensureUnchangedInputs()
       setBusy('candidates')
       const candidates = await api.searchCandidates({
         scenario_id: created.id,
@@ -1209,27 +1257,34 @@ export default function App() {
       })
       setCounts((current) => ({ ...current, candidates: candidates.length }))
 
+      ensureUnchangedInputs()
       setBusy('routes')
       const routes = await api.buildRoutes({ scenario_id: created.id, provider: health?.google_configured ? 'google' : 'auto' })
       setCounts((current) => ({ ...current, routes: routes.length }))
 
+      ensureUnchangedInputs()
       setBusy('recommend')
       const result = await api.recommend(await recommendationPayload(created.id, overrides, created))
+      ensureUnchangedInputs()
       setResponse(result)
       setSelectedId(result.recommendations[0]?.candidate.id || null)
     } catch (err) {
       setError(err.message)
     } finally {
+      pipelineInFlight.current = false
       setBusy('')
     }
   }
 
   async function refreshRecommendations(overrides = {}) {
-    if (!scenario) return
+    if (!canReuseRoutes) return
     setError('')
     try {
       setBusy('recommend')
       const result = await api.recommend(await recommendationPayload(scenario.id, overrides))
+      if (currentSearchContext.current !== searchContext) {
+        throw new Error('Konumlar veya arama alanları değişti; eski rotalarla sonuç gösterilmedi. Güncel bilgilerle yeniden arayın.')
+      }
       setResponse(result)
       setSelectedId(result.recommendations[0]?.candidate.id || null)
     } catch (err) {
@@ -1240,7 +1295,7 @@ export default function App() {
   }
 
   async function runExperiment() {
-    if (!scenario) return
+    if (!canReuseRoutes) return
     setError('')
     try {
       setBusy('experiment')
@@ -1266,7 +1321,7 @@ export default function App() {
     setCriterionWeights(profile.weights)
     setIntentSuggestion(null)
     setAiApplied(false)
-    if (scenario) refreshRecommendations({ criterionWeights: profile.weights })
+    if (canReuseRoutes) refreshRecommendations({ criterionWeights: profile.weights })
   }
 
   function chooseProfile(profileId) {
@@ -1285,6 +1340,7 @@ export default function App() {
     try {
       await api.deleteScenario(scenario.id)
       setScenario(null)
+      setScenarioContext(null)
       setResponse(null)
       setExperiment(null)
       setCounts({ candidates: 0, routes: 0 })
@@ -1356,14 +1412,14 @@ export default function App() {
           busy={busy}
         />
         <div className="action-row">
-          <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || !runtimeConfig || (runtimeConfig.production && !runtimeConfig.google_available)}>
+          <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || !canStartSearch}>
             {busy ? <Loader2 size={18} className="spin" /> : <Play size={18} />}
             {busy ? busyLabels[busy] || 'Çalışıyor' : 'Öneri üret'}
           </button>
           {scenario?.session_only && <button className="secondary" onClick={deleteCurrentScenario} disabled={Boolean(busy)} title="Senaryoyu ve konumlarını sil"><Trash2 size={18} /> Senaryoyu sil</button>}
         </div>
         {runtimeConfig?.production && <p className="privacy-note">Senaryolar oluşturulduktan en geç iki saat sonra silinir. Konumlar ve ham tercihler kalıcı veritabanına yazılmaz.</p>}
-        {runtimeConfig?.production && !runtimeConfig.google_available && <p className="error" role="status">{runtimeConfig.google_unavailable_reason || 'Google kullanımı şu anda kapalı.'}</p>}
+        {runtimeConfig && !canStartSearch && <p className="error" role="status">{runtimeConfig.google_unavailable_reason || 'Google kullanımı şu anda kapalı veya bağlantı doğrulanmadı.'}</p>}
         <ProgressRail busy={busy} counts={counts} response={response} />
       </section>
 
@@ -1377,7 +1433,11 @@ export default function App() {
         onChangeSuggestion={setIntentSuggestion}
         participants={intentParticipants}
         onInterpret={interpretIntent}
-        onApply={applyIntentSuggestion}
+        onApply={() => applyIntentSuggestion()}
+        onApplyAndFind={() => applyIntentSuggestion(true)}
+        canFind={canReuseRoutes || canStartSearch}
+        reusesRoutes={canReuseRoutes}
+        googleConfigured={health?.google_configured === true}
         onDiscard={() => setIntentSuggestion(null)}
         busy={busy}
       />
@@ -1421,7 +1481,7 @@ export default function App() {
               <h2>Öneriler</h2>
               <span>{response ? `${response.valid_alternatives} geçerli alternatif, ${recommendations.length} öneri` : 'Henüz sonuç yok'}</span>
             </div>
-            <button className="secondary" onClick={() => refreshRecommendations()} disabled={!scenario || Boolean(busy)}>
+            <button className="secondary" onClick={() => refreshRecommendations()} disabled={!canReuseRoutes || Boolean(busy)}>
               <RefreshCcw size={16} />
               Güncelle
             </button>

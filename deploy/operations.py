@@ -75,6 +75,24 @@ def rollback():
     save_json(ROOT / "private/release.json", previous)
 
 
+def import_ledger(source: Path):
+    if os.geteuid() != 0:
+        raise ValueError("Kullanım kaydı aktarımı sudo ile çalıştırılmalı.")
+    configuration()
+    private = ROOT / "private"
+    private.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Bind only a disposable copy; never expose the root-owned private directory.
+    with tempfile.TemporaryDirectory(prefix="ledger-transfer-", dir=private) as directory:
+        staged = Path(directory) / "ledger.json"
+        shutil.copyfile(source, staged)
+        os.chmod(staged, 0o600)
+        os.chown(staged, 10001, 10001)
+        os.chmod(directory, 0o700)
+        os.chown(directory, 10001, 10001)
+        compose("run", "--rm", "--no-deps", "-v", f"{directory}:/transfer:ro",
+                "api", "python", "scripts/backup_database.py", "import-ledger", "/transfer/ledger.json")
+
+
 def health():
     config = json.loads(compose("config", "--format", "json").stdout)
     origin = config["services"]["api"]["environment"]["PUBLIC_BASE_URL"]
@@ -117,7 +135,8 @@ def health():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("verify", "apply", "rollback", "health", "backup"))
+    parser.add_argument("command", choices=("verify", "apply", "rollback", "health", "backup", "import-ledger"))
+    parser.add_argument("--ledger", type=Path, help="Private ledger-only export to merge before enabling Google")
     args = parser.parse_args()
     try:
         if args.command == "verify":
@@ -129,6 +148,11 @@ if __name__ == "__main__":
             rollback()
         elif args.command == "backup":
             compose("exec", "-T", "api", "python", "scripts/backup_database.py", "backup")
+        elif args.command == "import-ledger":
+            if args.ledger is None:
+                raise ValueError("Özel kullanım kaydı dosyası gerekli.")
+            import_ledger(args.ledger)
+            print("Ledger merged; temporary transfer removed and original export preserved.")
         else:
             raise SystemExit(0 if health() else 1)
     except (OSError, ValueError, KeyError, subprocess.CalledProcessError):

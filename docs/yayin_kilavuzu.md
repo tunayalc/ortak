@@ -6,7 +6,7 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 
 | Kontrol | Durum |
 | --- | --- |
-| Backend testleri | 124/124 başarılı |
+| Backend testleri | 125/125 başarılı |
 | Mobil ve masaüstü arayüz testleri | 14/14 başarılı; 390 ve 1440 piksel, açık/koyu tema |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
 | Yerel ARM64 API ve web imajları | Derlendi; Caddy ve Compose yapılandırması doğrulandı |

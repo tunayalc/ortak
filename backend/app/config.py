@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from urllib.parse import urlparse
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("google_price_verified_at", mode="before")
+    @classmethod
+    def blank_price_timestamp(cls, value):
+        return None if value == "" else value
 
     @model_validator(mode="after")
     def validate_production(self):

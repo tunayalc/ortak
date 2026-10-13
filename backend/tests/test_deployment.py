@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.db import get_conn, init_db
 from app.services import google_usage, usage_guard
 
@@ -15,6 +15,12 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from scripts.backup_database import backup, export_ledger, import_ledger
 from scripts.deployment_state import DeploymentState, utcnow
 from test_public_release import production
+
+
+def test_empty_price_timestamp_allows_disabled_initial_setup():
+    settings = Settings(_env_file=None, GOOGLE_PRICE_VERIFIED_AT="", GOOGLE_MAPS_CALLS_ENABLED=False)
+    assert settings.google_price_verified_at is None
+    assert settings.google_maps_calls_enabled is False
 
 
 def test_state_parallel_claim_only_one_wins(tmp_path):

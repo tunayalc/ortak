@@ -9,15 +9,15 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 | Backend testleri | 152/152 başarılı; kullanım kaydı birleştirme ve servis bazlı kota kontrolü de test edildi |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| GitHub Actions ve ARM64 imajları | [İş akışı 38468540861](https://github.com/tunayalc/ortak/actions/runs/38468540861) başarılı: test, API ve web ARM64 imaj işleri geçti |
+| GitHub Actions ve ARM64 imajları | [İş akışı 38473305438](https://github.com/tunayalc/ortak/actions/runs/38473305438) başarılı: test, API ve web ARM64 imaj işleri geçti |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
-| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `cfa3026` commit'i çalışıyor |
+| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; yeni sunucuda `54037e3` commit'i ve doğrulanmış yeni API imajı çalışıyor |
 | Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'deki eski `ortak-beta` ve 50 GB boot diski sonlandırıldı. Yalnızca `ortak-beta-yeni` 2 OCPU/12 GB ve yaklaşık 47 GB boot diskiyle çalışıyor. Kısa süreli sunucu örtüşmesinin deneme kredisi kullanımına etkisi fatura ekranından ayrıca kontrol edilmeli |
 | Dış HTTPS | [Yeni sunucu](https://92.5.80.85.nip.io/) ve `/api/health` dışarıdan HTTPS 200 döndü; sertifika doğrulaması başarılı. On eşzamanlı `/api/readyz` isteği 200 döndü; API ve Ollama portları dışarıdan erişilemedi |
 | Sunucuda Llama 3 8B | İlk soğuk deney 35/36 idi: ilk istek 120,136 saniye. Başarısız rapor ayrı saklandı. Açılış yüklemesinden sonraki gerçek deney 36/36 geçti; en yavaş yanıt 51,756 saniye ve üç konteynerde OOM yok |
 | Canlı tarayıcıda Llama önizlemesi | “Mekân puanı daha önemli olsun, kişiler dengeli kalsın” isteği 70/33/33 kriter ve 1/1/1 kişi ağırlığı önerdi. Önizleme uygulanmadan kapatıldı; Google çağrısı yapılmadı |
 | Sağlık ve yedek | Model açılış servisi ile sağlık/yedek zamanlayıcıları etkin. Sağlık kontrolü geçti; ayrı SQLite yedeğinde bütünlük ve 11 satırlık kullanım kaydının guard ile eşleşmesi doğrulandı |
-| Google ve 24 saat gözlem | Yerel, korumalı pilot gerçek Google ile geçti: 1 Geocoding, 1 Places, 9 Routes; üç kişi ve üç aday için rota matrisi tam. Oracle'da yalnızca `92.5.80.85/32` ve üç API ile sınırlandırılmış ayrı anahtar kuruldu; çağrılar hâlâ kapalı. Sunucu pilotu, genel öneri akışı ve 24 saatlik gözlem tamamlanmadı |
+| Google ve 24 saat gözlem | Yerel, korumalı pilot gerçek Google ile geçti: 1 Geocoding, 1 Places, 9 Routes; üç kişi ve üç aday için rota matrisi tam. Oracle'da yalnızca `92.5.80.85/32` ve üç API ile sınırlandırılmış ayrı anahtar kuruldu. Yerel pilotun 22 kullanım kaydı sunucuya guard doğrulamasıyla taşındı; çağrılar hâlâ kapalı. Sunucu pilotu, genel öneri akışı ve 24 saatlik gözlem tamamlanmadı |
 
 14 Ekim'de kullanıcı, önceki 10.00 bekleme koşulunu açıkça değiştirerek yerel pilotun hemen başlatılmasını istedi. Onaylı 100 TL sınırıyla 11 gerçek Google isteği yapıldı; yeniden deneme olmadı. Bu, genel doğruluk veya Google faturası hakkında kesin bir iddia değildir. Ücretli sunucu, ödeme işlemi veya ikinci Google pilotu başlatılmadı.
 

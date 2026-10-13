@@ -40,6 +40,14 @@ test('form, kişi sayısı, delta ve dengeli kişiler', async ({ page }) => {
   await expect(page.getByLabel('Top-K', { exact: true })).toHaveAttribute('max', '3')
 })
 
+test('ana form klavye odağını şehirden mekân türüne taşır', async ({ page }) => {
+  await page.getByLabel('Şehir', { exact: true }).focus()
+  await page.keyboard.press('Tab')
+  await expect(page.getByLabel('Mekân türü')).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByLabel('Grup', { exact: true })).toBeFocused()
+})
+
 test('hatalı bağlantı öneri akışını durdurur', async ({ page }) => {
   let scenarios = 0
   page.on('request', (request) => { if (request.url().endsWith('/api/scenarios')) scenarios++ })

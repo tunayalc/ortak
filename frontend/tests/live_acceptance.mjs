@@ -146,9 +146,10 @@ try {
       await expect(page.locator('.recommendation-card')).toHaveCount(3)
     }
   }
+  phase = 'keyboard_navigation'
   await page.getByLabel('Şehir', { exact: true }).focus()
   await page.keyboard.press('Tab')
-  await expect(page.getByLabel('Mekân türü', { exact: true })).toBeFocused()
+  await expect(page.getByLabel('Mekân türü')).toBeFocused()
   check('keyboard_navigation', true)
   check('http_success', report.stages.every(s => s.http_status === 200))
   check('all_recorded_checks', Object.values(report.checks).every(Boolean))

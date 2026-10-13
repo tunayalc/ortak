@@ -9,10 +9,10 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 | Backend testleri | 142/142 başarılı; yerel pilot bütçe koruması, model ön kontrolü, özel ledger aktarımı, kullanım guard'ının paylaşım dışı tutulması ve konteynerde pilot CLI açılışı doğrulandı |
 | Mobil ve masaüstü arayüz testleri | 26/26 başarılı; 390 ve 1440 piksel, açık/koyu tema; onaylı tercih ile konum araması da sınandı |
 | Gerçek yerel Llama 3 8B | 36/36 başarılı; ortalama 2,10 sn, azami 6,87 sn; Oracle performansı değildir |
-| Yerel ARM64 API ve web imajları | Güncel API ve web imajları derlendi; üretim açılışı, bütçe koruması, pilot CLI, Caddy, `/api` bağlantısı ve özel dosya yokluğu doğrulandı. GitHub Actions / GHCR kabulü bekliyor; yerel kontrol canlı yayın değildir |
+| GitHub Actions ve ARM64 imajları | [İş akışı 38414797398](https://github.com/tunayalc/ortak/actions/runs/38414797398) başarılı: test, API ve web imaj işleri geçti. İki ARM64 imajı digest ile doğrulandı ve anonim GHCR erişiminde HTTP 200 döndü. Sunucu kabulü ayrıca yapılacak |
 | Tutarlı SQLite yedeği | Birim testlerinde ve ARM64 konteynerinde doğrulandı |
-| GitHub deposu | Oluşturuldu; kod gönderimi eksik workflow yetkisi nedeniyle bekliyor |
-| Oracle hesabı ve ücretsiz kapasite | Frankfurt hesabı doğrulandı; kullanıcı tarafından gönderilen AD-3 oluşturma denemesi kapasite hatasıyla durdu. Sunucu, VCN, blok ve boot disk listelerinde kaynak görülmedi. SSH açık anahtarı doğrulandı; sonraki deneme için AD-1, 2 OCPU / 12 GB RAM ve 50 GB disk hazırlandı. Canlı sunucu yok |
+| GitHub deposu | [tunayalc/ortak](https://github.com/tunayalc/ortak) açık; `04d368c` commit'i `main` dalına gönderildi |
+| Oracle hesabı ve ücretsiz kapasite | Frankfurt AD-1'de kullanıcı tarafından oluşturulan `ortak-beta` çalışıyor: 2 OCPU, 12 GB RAM, 50 GB boot disk. Konsolda CPU/bellek kullanımı 2/12, ücretsiz disk kotası 200 GB içinden kullanım 50 GB görüldü. Geçici genel IPv4 atandı; uygulamanın HTTPS üzerinden çalışması henüz doğrulanmadı |
 | Sunucuda Llama, Google pilotu, HTTPS ve 24 saat gözlem | Bekliyor; tamamlandı sayılmıyor |
 
 Bu turda yeni ücretli Google Maps API çağrısı, ücretli sunucu veya ödeme işlemi yapılmadı. Gerçek Llama testi yalnızca kurgusal geliştirme cümleleriyle yapıldı; genel doğruluk iddiası değildir. Sonraki kontrol sonuçları bu tabloya kanıtlarıyla eklenir.
@@ -48,15 +48,15 @@ Bu akışın arayüz testleri kurgusal model önerileri ve Google kullanılmayan
 
 Ana bölge Frankfurt olacak. Yalnızca konsolda Always Free uygunluğu ve hesap genelindeki kullanılabilir kotası doğrulanan 2 OCPU, 12 GB bellek, 50 GB boot disk kullanılacak. Ücretli yükseltme, yük dengeleyici, NAT Gateway veya alan adı alınmayacak. Kapasite yetersizliğinde oluşturma en sık saatte bir denenecek. [Oracle sınırları](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)
 
-13 Ekim'de yetkili konsolda Frankfurt ana bölgesi ve Free Tier hesap doğrulandı. Bölgesel Ampere işlemci ve bellek kullanımı sıfır, ücretsiz boot/blok disk kotası 200 GB ve kullanım sıfır görüldü. Deneme hesabının daha geniş servis limiti ücretsiz kullanım izni değildir. Resmî Always Free belgesindeki aylık 1.500 OCPU-saat ve 9.000 GB-saat sınırları korunur. `VM.Standard.A1.Flex` için 2 OCPU ve 12 GB, ücretsiz `Canonical Ubuntu 24.04 Minimal aarch64` imajı formda seçildi. İlk hazırlık aşamasında ajan oluşturma isteği göndermedi; ardından kullanıcının gönderdiği deneme aşağıdaki kapasite hatasıyla sonuçlandı. Formun açılması fiziksel sunucu kapasitesi bulunduğunu kanıtlamaz.
+13 Ekim'de yetkili konsolda Frankfurt ana bölgesi ve Free Tier hesap doğrulandı. İlk AD-3 denemesi kapasite hatası verdi. Daha sonra kullanıcı, AD-1'de `VM.Standard.A1.Flex` (2 OCPU, 12 GB) ve `Canonical Ubuntu 24.04 Minimal aarch64` ile `ortak-beta` sunucusunu oluşturdu. Gerçek boot diski 50 GB bağlı durumda. Oracle limit ekranında AD-1 CPU/bellek kullanımı 2/12, bölgesel ücretsiz boot/blok disk kotası 200 GB ve kullanım 50 GB görüldü. Deneme hesabının daha geniş servis limiti ücretsiz kullanım izni değildir. Resmî Always Free belgesindeki aylık 1.500 OCPU-saat ve 9.000 GB-saat sınırları korunur. Sunucuya geçici genel IPv4 atandı; üretim kurulumu sürüyor.
 
 Dağıtım için ayrı bir SSH anahtarı özel dizinde üretildi; yalnızca açık anahtar Oracle'a verilebilir. Kullanıcının yapıştırdığı açık anahtar, yereldeki anahtarın SHA-256 özetiyle karşılaştırılarak doğrulandı. Özel anahtar gönderilmedi ve yeni tarayıcı dosya erişim yetkisi açılmadı. Aynı SSH anahtarı yeniden kullanılmalı; anahtar üretimi otomatik tekrarlanmamalı.
 
-Kullanıcı tarafından gönderilen AD-3 oluşturma isteği kapasite hatasıyla durdu. Frankfurt kök bölmesindeki sunucu, VCN, blok disk ve boot disk listelerinde kaynak görülmedi. Sonraki deneme için AD-1 seçildi; 2 OCPU, 12 GB bellek, ücretsiz Ubuntu ARM64 imajı, 50 GB boot disk ve 10 VPU dengeli disk performansı formda doğrulandı. Bu hazırlık yeni oluşturma isteği veya fiziksel kapasite kanıtı değildir. Sabit fault domain seçilmedi. Genel IP ve IPv6 ilk oluşturma sırasında kapalı tutulacak; ağ güvenlik kuralları doğrulanmadan dış erişim açılmayacak.
+İlk AD-3 kapasite hatasının ardından AD-1'deki mevcut sunucu doğrulandı; yeni bir kopyası oluşturulmaz. `ortak-vcn` içindeki alt ağ genel alt ağdır; internet ağ geçidi ve `0.0.0.0/0` yönlendirmesi vardır. Kullanıcının ağ erişimine verdiği onayın ardından Oracle güvenlik listesinde SSH yalnızca yönetici `/32` adresine daraltıldı, TCP 80/443 açıldı ve mevcut ağ kartına geçici genel IPv4 atandı. Sunucu güvenlik duvarı aynı erişim sınırlarıyla kalıcılaştırıldı; 8000 ve 11434 dışarı açılmadı.
 
 Maliyet penceresinde boot disk için aylık 1,98 EUR liste tahmini görüldü; pencere hesap kotasının ücretsiz tahsisini doğrulayan bir fatura değildir. [Resmî Always Free kapsamı](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm), ana bölgede toplam 200 GB boot/blok disk ve aylık 1.500 OCPU-saat / 9.000 GB-saat içerir. Her gerçek oluşturma isteğinden önce hesap genelindeki boş kota ve ücretsiz uygunluk yeniden kontrol edilir. Uygunluk belirsizse oluşturma yapılmaz; deneme kredileri ücretli kaynak açma izni değildir.
 
-Son oluşturma zamanının kesin bilinmediği durumda bir saatlik bekleme, hata gözlemi üzerinden ihtiyatlı hesaplanır. Özel durum kaydı, aynı denemenin otomasyon tarafından hemen tekrarlanmasını engeller. Yeniden denemeden önce mevcut kaynaklar tekrar uzlaştırılır; başarısız isteğin bıraktığı kaynak varsa yeni bir kopya oluşturulmaz. Kapasite beklerken ücretli şekle veya ücretli hesap yükseltmesine geçilmez.
+Özel durum kaydı, mevcut kaynağın kimliğini ve ücretsiz kota kullanımını tutar. Önceki kapasite hatası yeni deneme nedeni sayılmaz; mevcut sunucu kullanılır. Ücretli şekle veya ücretli hesap yükseltmesine geçilmez.
 
 Ubuntu ARM64 sunucusunda SSH yalnızca yönetici IP'sine `/32` ile açılır. HTTP 80 ve HTTPS 443 uygulama yayını için kullanılır; FastAPI 8000 ve Ollama 11434 dışarıya açılmaz. Oracle güvenlik listesi ve sunucu güvenlik duvarı birlikte doğrulanır. Parola ve banka doğrulamalarını kullanıcı tamamlar; yeni sözleşme veya erişim yetkileri ilgili aşamada onaylanır.
 
@@ -123,7 +123,7 @@ sudo systemctl enable --now ortak-health.timer ortak-backup.timer
 
 Sağlık kontrolü beş dakikada bir HTTPS, SQLite, model listesi, disk ve konteyner durumunu okur; ücretli Google çağrısı veya model üretimi yapmaz. Ham tercih, konum, IP, model yanıtı ve sorgu parametreleri günlüğe yazılmaz. 24 saatlik gözlemde başarısız kontrol veya on dakikayı aşan boşluk gözlem süresini yeniden başlatır. API çökünce oturumluk konumlar kaybolur.
 
-SQLite backup API'siyle günlük tutarlı yedek alınır; son yedi kopya özel tutulur. Sağlık kayıtları `deploy/private/` altındadır. Bunlar GitHub'a gönderilmez. Yerel Codex takibi için bilgisayar ve uygulama açık olmalıdır; sunucu timer'ları bundan bağımsızdır. [Codex otomasyonları](https://learn.chatgpt.com/docs/automations?surface=app)
+SQLite backup API'siyle günlük tutarlı yedek alınır; son yedi kopya özel tutulur. Sağlık kayıtları `deploy/private/` altındadır. Bunlar GitHub'a gönderilmez. Kullanıcının isteğiyle Codex yayın takip otomasyonu silindi. Sunucu timer'ları kurulursa bilgisayardan bağımsız çalışır; kurulduğu ayrıca doğrulanmalıdır.
 
 ## Geri dönüş ve kurtarma
 
@@ -131,4 +131,4 @@ Google çağrılarını kapattıktan sonra `python3 operations.py rollback` önc
 
 ## Tamamlanma ölçütü
 
-GitHub deposu, ARM64 imajlar, sunucuda Llama kabulü, onaylı Google pilotu, dış istemciden HTTPS ve öneri doğrulaması, yedekten kurtarma ve kesintisiz 24 saatlik sağlık gözlemi birlikte tamamlanmalıdır. Son teslimde sürüm etiketi, temizlenmiş sonuç özeti ve tamamlandı–eksik–engelli listesi verilir. Yayın takip otomasyonu yalnızca bu teslimden sonra duraklatılır. Ücretsiz kaynakların kesintisiz çalışması garanti değildir; yapay yük üreterek Oracle'ın boşta kalma kuralları aşılmaz.
+GitHub deposu, ARM64 imajlar, sunucuda Llama kabulü, ayrıca onaylı Google pilotu, dış istemciden HTTPS ve öneri doğrulaması, yedekten kurtarma ve kesintisiz 24 saatlik sağlık gözlemi birlikte tamamlanmalıdır. Son teslimde sürüm etiketi, temizlenmiş sonuç özeti ve tamamlandı–eksik–engelli listesi verilir. Silinen Codex otomasyonu kendiliğinden yeniden kurulmaz. Ücretsiz kaynakların kesintisiz çalışması garanti değildir; yapay yük üreterek Oracle'ın boşta kalma kuralları aşılmaz.

@@ -30,7 +30,10 @@ services:
       OLLAMA_MODEL: llama3:8b
       GOOGLE_LEDGER_WATERMARK_PATH: /guard/google-watermark.json
     volumes: ["./data:/data", "./guard:/guard", "./backups:/backups"]
-    networks: [public, model]
+    networks:
+      public:
+        ipv4_address: 172.30.0.3
+      model: {}
     read_only: true
     tmpfs: ["/tmp:size=32m,mode=1777"]
     cap_drop: [ALL]

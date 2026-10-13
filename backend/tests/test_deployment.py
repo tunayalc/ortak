@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 import importlib.util
+from ipaddress import ip_address, ip_network
 import json
 from pathlib import Path
 import sqlite3
@@ -8,6 +9,7 @@ import subprocess
 import sys
 
 import pytest
+import yaml
 
 from app.config import Settings, get_settings
 from app.db import get_conn, init_db
@@ -20,6 +22,16 @@ from test_public_release import production
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from deploy import operations
+
+
+def test_public_proxy_and_api_have_distinct_static_ips():
+    config = yaml.safe_load((Path(__file__).resolve().parents[2] / "deploy/compose.yaml").read_text())
+    network = ip_network(config["networks"]["public"]["ipam"]["config"][0]["subnet"])
+    proxy = ip_address(config["services"]["web"]["networks"]["public"]["ipv4_address"])
+    api = ip_address(config["services"]["api"]["networks"]["public"]["ipv4_address"])
+    assert proxy == ip_address("172.30.0.2")  # uvicorn trusts only this proxy address.
+    assert api != proxy
+    assert api in network and api != network.network_address + 1
 
 
 @pytest.mark.parametrize("path", [

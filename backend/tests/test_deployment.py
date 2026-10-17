@@ -26,7 +26,10 @@ from deploy import operations
 
 
 def test_warmup_requires_installed_model_and_confirms_loaded(monkeypatch):
-    monkeypatch.setattr(operations, "configuration", lambda: {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}})
+    def configuration(**kwargs):
+        assert kwargs == {"require_google_disabled": False}
+        return {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}}
+    monkeypatch.setattr(operations, "configuration", configuration)
     calls = []
 
     def compose(*args, **kwargs):
@@ -45,7 +48,7 @@ def test_warmup_requires_installed_model_and_confirms_loaded(monkeypatch):
 
 
 def test_warmup_never_pulls_missing_model(monkeypatch):
-    monkeypatch.setattr(operations, "configuration", lambda: {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}})
+    monkeypatch.setattr(operations, "configuration", lambda **_: {"services": {"api": {"environment": {"OLLAMA_MODEL": "llama3:8b"}}}})
     calls = []
 
     def compose(*args, **kwargs):
@@ -56,6 +59,24 @@ def test_warmup_never_pulls_missing_model(monkeypatch):
     with pytest.raises(ValueError, match="otomatik indirme"):
         operations.warmup()
     assert len(calls) == 1 and calls[0][-1] == "list"
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("require_disabled", [False, True])
+def test_read_only_warmup_allows_live_google_but_release_changes_remain_guarded(monkeypatch, enabled, require_disabled):
+    config = {"services": {name: {"image": f"ghcr.io/tunayalc/ortak-{name}@sha256:" + "0" * 64}
+                            for name in ("api", "web", "ollama")}}
+    config["services"]["web"]["environment"] = {"PUBLIC_HOST": "ortak.example.test"}
+    env = {"PUBLIC_BASE_URL": "https://ortak.example.test", "SESSION_SECRET": "x" * 40,
+           "GOOGLE_MAPS_CALLS_ENABLED": str(enabled).lower()}
+    config["services"]["api"]["environment"] = env
+    monkeypatch.setattr(operations, "compose", lambda *args: SimpleNamespace(stdout=json.dumps(config)))
+    if enabled and require_disabled:
+        with pytest.raises(ValueError, match="kapalı"):
+            operations.configuration()
+    else:
+        result = operations.configuration(require_google_disabled=require_disabled)
+        assert result["services"]["api"]["environment"] == env
 
 
 def test_public_proxy_and_api_have_distinct_static_ips():

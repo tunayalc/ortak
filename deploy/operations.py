@@ -22,7 +22,7 @@ def compose(*args, check=True, timeout=None):
     return subprocess.run(["docker", "compose", "--project-directory", str(ROOT), "-f", str(ROOT / "compose.yaml"), *args], check=check, capture_output=True, text=True, timeout=timeout)
 
 
-def configuration():
+def configuration(*, require_google_disabled=True):
     config = json.loads(compose("config", "--format", "json").stdout)
     for service in ("web", "api", "ollama"):
         if not IMAGE.fullmatch(config["services"][service]["image"]):
@@ -33,8 +33,8 @@ def configuration():
         raise ValueError("HTTPS adresi ve PUBLIC_HOST eşleşmiyor.")
     if len(env.get("SESSION_SECRET", "")) < 32 or "REPLACE" in env["SESSION_SECRET"]:
         raise ValueError("Güçlü, özel bir oturum anahtarı gerekli.")
-    if env.get("GOOGLE_MAPS_CALLS_ENABLED", "false").lower() not in {"false", "0"}:
-        raise ValueError("Kurulum, sağlık kontrolü ve geri dönüşte Google çağrıları kapalı olmalı.")
+    if require_google_disabled and env.get("GOOGLE_MAPS_CALLS_ENABLED", "false").lower() not in {"false", "0"}:
+        raise ValueError("Kurulum ve geri dönüş sırasında Google çağrıları kapalı olmalı.")
     return config
 
 
@@ -76,7 +76,7 @@ def rollback():
 
 
 def warmup():
-    model = configuration()["services"]["api"]["environment"]["OLLAMA_MODEL"]
+    model = configuration(require_google_disabled=False)["services"]["api"]["environment"]["OLLAMA_MODEL"]
     if model != "llama3:8b":
         raise ValueError("Yalnızca onaylanan llama3:8b modeli yüklenebilir.")
     available = compose("exec", "-T", "ollama", "ollama", "list").stdout.splitlines()

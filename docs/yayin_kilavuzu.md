@@ -1,6 +1,20 @@
 # ORTAK Ücretsiz Yayın Kılavuzu
 
-ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışacak kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi, sunucu kabulünün tamamlandığı anlamına gelmez.
+ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışan kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi tek başına sunucu kabulü değildir; aşağıdaki kayıtlar gerçek sunucu kanıtlarını ayrı gösterir.
+
+## 17 Ekim 2026: Canlı Yayın Kabulü
+
+- Canlı adres: [ORTAK](https://92.5.80.85.nip.io/). Ön yüz, API ve gerçek `llama3:8b` Oracle'da çalışır; kişisel bilgisayarın açık kalması gerekmez.
+- 24 saatlik gözlem koşulu tamamlandı. Sunucu kaydı yaklaşık 78,45 saat kesintisiz sağlık gösterdi; son 24 saatte 282 kontrol başarılı, en büyük kontrol aralığı 311,053 saniye.
+- Üç konteyner çalışıyor; bellek taşması ve konteyner yeniden başlatması görülmedi. Docker ve model açılış birimi etkin; sağlık ve günlük yedek zamanlayıcıları etkin ve çalışır durumda. Güncel yedeğin SQLite bütünlüğü ve 43 kullanım kaydı doğrulandı.
+- Google kullanımı açık; günlük kota yenilenmiş ve varsayılan üç kişilik yeni arama kapasitesi kullanılabilir. Mevcut toplam 100 TL ihtiyatlı maliyet koruması ve günlük 33 deneme sınırı değişmedi. Bu kontrolde yeni Google çağrısı veya ödeme yapılmadı.
+- Modelin açılışta yüklenmesini Google çağrıları açıkken engelleyen yönetim betiği düzeltildi. Sadece kurulum/geri dönüş işlemleri çağrıların kapalı olmasını zorunlu tutar; yalnızca kurulu yerel modeli yükleyen açılış işlemi bu ayarı değiştirmez, model indirmez ve Google çağrısı yapmaz. Düzeltme sunucudaki gerçek systemd birimiyle doğrulandı.
+- Son [CI çalışması](https://github.com/tunayalc/ortak/actions/runs/39008985607): 171 backend ve 34 arayüz testi, API/web ARM64 imajları başarılı. Yönetim betiği `6c978ac` sürümüne alındı. Uygulama kodu değişmediği için kabulü geçmiş `8f8f34f` imajları korunarak servis kesintisi ve oturum kaybı önlendi.
+- Son ücretsiz üretim tarayıcısı kontrolü sağlık, Llama hazırlığı, gerçek kota ile düğme uyumu ve 390/1440 pikselde klavye kullanımını doğruladı. Gerçek ücretli öneri kanıtı 14 Ekim'deki Llama–Google–dokuz rota–kart akışıdır; bu tur o ücretli test tekrarlanmadı.
+
+Özel kanıtlar `output/deployment/persistent-release-20261017.json` ve `output/deployment/browser-live-20261017-readiness/` altında tutulur; ham konum, tercih, Google içeriği veya anahtar içermez ve GitHub'a gönderilmez. Silinen Codex otomasyonu yeniden kurulmadı; mevcut sunucu zamanlayıcıları kişisel bilgisayardan bağımsızdır.
+
+**Süreklilik sınırı:** Site ve yerel model sunucuda açık kalır; Google araması kota, mevcut toplam bütçe ve yedi günlük doğrulanmış fiyat kaydıyla sınırlıdır. Bu korumalar kendiliğinden kaldırılmaz. Bütçe dolarsa, günlük kapasite yetmezse veya fiyat bilgisi eskirse yeni ücretli arama durur; site ve manuel tercihler erişilebilir kalır. Fiyat yenilemesi resmî kaynaklarla doğrulanmalı; bütçe artışı ayrı kullanıcı onayı gerektirir. Oracle Always Free kaynakları için kesintisiz veya süresiz hizmet garantisi verilmez.
 
 ## 14 Ekim 2026 Durumu
 

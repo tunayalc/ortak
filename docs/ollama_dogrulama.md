@@ -12,6 +12,8 @@ Son yerel canlı kayıt: `output/ollama/llama3-final.json`; ilk başarısız kay
 
 14 Ekim'de gerçek üretim HTTPS tarayıcısında fiyat önceliği ve 2/1/1 kişi ağırlığı isteği 20,972 saniyede yorumlandı. Onay öncesinde ayarlar değişmedi; onaydan sonra üç gerçek Google mekânı ve dokuz rota ile öneriler üretildi. Profil/kişi/filtre güncellemeleri ek Google çağrısı üretmedi. Son CI sonucu **167 backend ve 34 arayüz testi**; bu otomatik testler gerçek model kabulünden ayrı tutulur. Klavye testindeki seçici hatası sıfır ücretli çağrılı canlı kontrolle düzeltildi; özgün başarısız kayıt silinmedi. Yerel ve üretim deneyleri genel Türkçe doğruluk garantisi değildir. Tam yayın kabulü için 24 saatlik sağlık gözlemi hâlâ gereklidir. Güncel ayrıntılar [yayın kılavuzundadır](yayin_kilavuzu.md).
 
+17 Ekim'de sunucunun 24 saatlik gözlemi tamamladığı, modelin hazır olduğu ve yaklaşık 78 saat sağlıklı kaldığı doğrulandı. Google kullanımı açıkken systemd açılış yüklemesini engelleyen kontrol düzeltildi; gerçek açılış birimi Google çağrısı olmadan başarılı çalıştı. Son CI **171 backend ve 34 arayüz testini** geçti. Önceki paragraf 14 Ekim'deki durumu anlatır; 24 saat koşulu artık tamamlanmıştır. Yeni model indirilmedi, modele veya ücretli Google akışına alternatif bir sağlayıcı eklenmedi.
+
 ## Önceki Qwen Doğrulaması
 
 ## Ortam

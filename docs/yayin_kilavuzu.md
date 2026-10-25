@@ -124,6 +124,16 @@ python3 operations.py verify
 
 `SESSION_SECRET` en az 32 rastgele karakter olmalı; örnek yer tutucular kabul edilmez. Caddy güvenilir vekil adresi `172.30.0.2` olarak sabittir. Başka ağdan gelen `X-Forwarded-For` başlıkları API tarafından güvenilir kabul edilmez. Compose ağı bu subnet ile çakışırsa API vekil adresi ve Compose birlikte değiştirilip yeniden test edilir.
 
+## Otomatik maliyet yenileme
+
+Üretimde `GOOGLE_PRICE_AUTO_REFRESH_ENABLED=true` varsayılandır. FastAPI açılışta ve ardından altı saatte bir, kimlik bilgisi göndermeden Google'ın herkese açık fiyat listesini, TCMB kurunu ve gözden geçirilmiş GİB KDV referansını okur. Bu işlem Places, Geocoding veya Routes çağrısı yapmaz. Başarısız güncelleme 15 dakika sonra yeniden denenir; son doğrulanmış kayıt bozulmaz ve doğrulama tarihi başarısızlıkta ilerletilmez. Ayrı Codex otomasyonu veya sunucu yeniden başlatması gerekmez.
+
+Doğrulanmış fiyatlar SQLite dosyasının yanındaki `google-prices.json` dosyasına atomik olarak yazılır. Bütçe kontrolü bu dosyayı yeniden başlatma gerekmeden okur. İlk yükseltmede dosya henüz yoksa süresi geçmemiş ortam değişkenleri kullanılabilir. Var olan dosya bozuksa veya yedi günden uzun süredir doğrulanamıyorsa eski tarih gizlenmez; ücretli arama güvenli biçimde durur. Normal koşullarda altı saatlik yenileme sayesinde kurulum tarihinden yedi gün sonra kendiliğinden kullanım kesilmez.
+
+Hesap, kullanılan SKU'ların ilk ücretli kademesini esas alır; ücretsiz aylık kullanım veya hacim indirimi varsaymaz. Kur rezervi en az 60 TL/USD veya TCMB satış kurunun %20 fazlasıdır; ayrıca %20 KDV rezervi ve %25 güvenlik payı korunur. Bu değerler tahmini rezervdir, fatura veya kesin tahsilat tavanı değildir. GİB referans dosyası değişirse otomatik vergi yorumu yapılmaz; yeni belgenin gözden geçirilmesi gerekir. [Google fiyatları](https://developers.google.com/maps/billing-and-pricing/pricing), [TCMB](https://www.tcmb.gov.tr/kurlar/today.xml), [GİB](https://cdn.gib.gov.tr/api/gibportal-file/file/getFileResources?objectKey=arsiv%2Fyardim-kaynaklar%2Fyararli-bilgiler%2Fkdv-oranlari.pdf).
+
+Yenileme, bütçeyi, API kotalarını, kullanım geçmişini, guard dosyasını veya oturum güvenliğini değiştirmez. Yetkili bir harcama tavanı olmadan sınırsız kullanım açılmaz. Bu özellik ancak testleri geçen yeni API imajı gerçekten sunucuda çalıştırıldıktan sonra canlıya geçmiş sayılır; yalnızca GitHub'a gönderilmesi mevcut sunucuyu güncellemez.
+
 ## Google kullanım kaydını taşıma
 
 Önce yerelde ücretli çağrılar kapatılır ve çalışan backend'in yeniden yüklediği doğrulanır. Eski SQLite dosyasını sunucuya kopyalamayın: sentetik senaryo veya eski Google içeriği barındırabilir. Yalnızca `google_api_usage` kayıtları aktarılır; deneme sayıları sıfırlanmaz.

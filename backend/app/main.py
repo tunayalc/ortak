@@ -38,6 +38,7 @@ from .services.preference_interpreter import PreferenceServiceError, interpret_p
 from .services.scenario import create_scenario, get_scenario
 from .services.scoring import recommend
 from .services import session_store
+from .services.google_prices import refresh_loop
 from .services.public_safety import PublicSafetyMiddleware
 
 
@@ -63,12 +64,16 @@ async def lifespan(app):
             session_store.cleanup_expired()
             await asyncio.sleep(30)
     task = asyncio.create_task(cleanup())
+    price_task = asyncio.create_task(refresh_loop())
     try:
         yield
     finally:
         task.cancel()
+        price_task.cancel()
         with suppress(asyncio.CancelledError):
             await task
+        with suppress(asyncio.CancelledError):
+            await price_task
 
 
 @router.get("/health")

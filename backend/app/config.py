@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     google_unit_prices_tl: dict[str, float] = Field(default_factory=dict, alias="GOOGLE_UNIT_PRICES_TL")
     google_price_verified_at: Optional[datetime] = Field(default=None, alias="GOOGLE_PRICE_VERIFIED_AT")
     google_price_source: str = Field(default="", alias="GOOGLE_PRICE_SOURCE")
+    google_price_auto_refresh_enabled: bool = Field(default=True, alias="GOOGLE_PRICE_AUTO_REFRESH_ENABLED")
     google_ledger_watermark_path: str = Field(default="", alias="GOOGLE_LEDGER_WATERMARK_PATH")
     google_maps_api_key: Optional[str] = Field(default=None, alias="GOOGLE_MAPS_API_KEY")
     google_maps_calls_enabled: bool = Field(default=False, alias="GOOGLE_MAPS_CALLS_ENABLED")

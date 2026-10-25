@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from ..config import get_settings
 from ..db import get_conn
 from . import usage_guard
+from .google_prices import load_snapshot
 
 
 class GoogleUsageBlocked(RuntimeError):
@@ -32,12 +33,21 @@ def service_remaining(conn, day):
 
 def verified_prices() -> dict[str, float]:
     settings = get_settings()
+    if settings.production and settings.google_price_auto_refresh_enabled:
+        try:
+            snapshot = load_snapshot()
+            if snapshot is not None:
+                return snapshot.unit_prices_tl
+        except (OSError, ValueError):
+            raise GoogleUsageBlocked("Güncel maliyet bilgisi doğrulanamadı; yeni aramalar geçici olarak kullanılamıyor.") from None
     stamp = settings.google_price_verified_at
     prices = settings.google_unit_prices_tl
     if not stamp or stamp.tzinfo is None or not settings.google_price_source:
         raise GoogleUsageBlocked("Güncel ve kaynaklı TL maliyet bilgisi eksik; Google çağrıları durduruldu.")
     age = (datetime.now(timezone.utc) - stamp).total_seconds()
     if age < 0 or age > 7 * 86400:
+        if settings.production and settings.google_price_auto_refresh_enabled:
+            raise GoogleUsageBlocked("Maliyet bilgisi otomatik yenileniyor; yeni aramalar geçici olarak kullanılamıyor.")
         raise GoogleUsageBlocked("Maliyet bilgisinin yedi günlük geçerlilik süresi doldu; Google çağrıları durduruldu.")
     if not OPERATIONS.issubset(prices) or any(not math.isfinite(prices[key]) or prices[key] <= 0 for key in OPERATIONS):
         raise GoogleUsageBlocked("Vergi ve güvenlik payı içeren geçerli birim fiyatlar eksik; Google çağrıları durduruldu.")

@@ -14,6 +14,7 @@ def isolated_local_credentials(monkeypatch):
     monkeypatch.setitem(Settings.model_config, "env_file", None)
     monkeypatch.setenv("GOOGLE_MAPS_API_KEY", "")
     monkeypatch.setenv("GOOGLE_MAPS_CALLS_ENABLED", "false")
+    monkeypatch.setenv("GOOGLE_PRICE_AUTO_REFRESH_ENABLED", "false")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

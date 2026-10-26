@@ -99,6 +99,17 @@ def test_status_does_not_need_or_print_configuration(authorized_admin, monkeypat
     assert set(result) == {"ok", "action", "docker_active", "configuration_present"}
 
 
+def test_provision_only_runs_the_fixed_root_owned_installer(authorized_admin, monkeypatch):
+    trusted = []
+    calls = []
+    monkeypatch.setattr(admin, "trusted", lambda path, **kwargs: trusted.append((path, kwargs)))
+    monkeypatch.setattr(admin.subprocess, "run", lambda argv, **kwargs: calls.append((argv, kwargs)) or SimpleNamespace(returncode=0))
+    assert admin.execute("provision")["ok"] is True
+    assert calls[0][0] == ["/usr/bin/python3", "-I", "/usr/local/libexec/ortak-provision.py"]
+    assert calls[0][1]["timeout"] == 3600
+    assert trusted[-1] == (Path("/usr/local/libexec/ortak-provision.py"), {"private": True})
+
+
 def test_admin_redacts_subprocess_failure(authorized_admin, monkeypatch, capsys):
     def fail(*_, **__):
         raise subprocess.CalledProcessError(1, "private command", stderr="secret")

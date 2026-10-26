@@ -14,7 +14,7 @@ import sys
 
 ROOT = Path("/opt/ortak/deploy")
 LOCK = Path("/run/lock/ortak-command-admin.lock")
-ACTIONS = ("status", "verify", "apply", "rollback", "warmup", "health", "backup")
+ACTIONS = ("status", "provision", "verify", "apply", "rollback", "warmup", "health", "backup")
 ENVIRONMENT = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/root", "LANG": "C.UTF-8"}
 
 
@@ -54,15 +54,23 @@ def execute(action: str):
         raise ValueError("unsupported_action")
     if os.geteuid() != 0:
         raise PermissionError("root_required")
-    check_layout(configuration=action != "status")
+    check_layout(configuration=action not in {"status", "provision"})
     with exclusive_operation():
         if action == "status":
             result = subprocess.run(["/usr/bin/systemctl", "is-active", "docker"],
                                     capture_output=True, text=True, timeout=15, env=ENVIRONMENT, cwd="/")
             return {"ok": True, "action": action, "docker_active": result.returncode == 0,
                     "configuration_present": (ROOT / ".env").is_file()}
-        result = subprocess.run(["/usr/bin/python3", "-I", str(ROOT / "operations.py"), action],
-                                capture_output=True, text=True, timeout=900, env=ENVIRONMENT, cwd=ROOT)
+        if action == "provision":
+            program = Path("/usr/local/libexec/ortak-provision.py")
+            for parent in reversed(program.parents):
+                trusted(parent, directory=True)
+            trusted(program, private=True)
+            argv = ["/usr/bin/python3", "-I", str(program)]
+        else:
+            argv = ["/usr/bin/python3", "-I", str(ROOT / "operations.py"), action]
+        result = subprocess.run(argv, capture_output=True, text=True,
+                                timeout=3600 if action == "provision" else 900, env=ENVIRONMENT, cwd=ROOT)
         # Even a failing Compose invocation may include private configuration in its output.
         return {"ok": result.returncode == 0, "action": action, "returncode": result.returncode}
 

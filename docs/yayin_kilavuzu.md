@@ -113,6 +113,12 @@ Ubuntu ARM64 sunucusunda SSH yalnızca yönetici IP'sine `/32` ile açılır. HT
 
 ## Üretim kurulumu
 
+Temiz kurulumda tercih edilen platform Oracle Linux 9 ARM64'tür. `deploy/bootstrap.sh`, önce platformu kontrol eder; Oracle Linux 9 ve mevcut Ubuntu 24.04 yolu dışında paket kurmaz. `bash deploy/bootstrap.sh --check-platform ol 9.7` komutu hiçbir sistem değişikliği yapmadan platform seçimini doğrular.
+
+Oracle Linux yolunda Docker'ın imzalı EL9 paket deposu kullanılır; imza anahtarının parmak izi doğrulanmadan paketler kurulmaz. Docker'ın SELinux desteği etkinleştirilir ve API veri/guard/yedek bağlamaları özel `:Z` etiketiyle açılır. SELinux kapatılmaz. Ubuntu kurulumu korunur. Oracle Linux paket uyumluluğu, gerçek yeni ARM64 makinede `docker info`, `docker compose version` ve uygulama sağlık kontrolleriyle ayrıca doğrulanır; platform birim testi gerçek makine kurulumunun yerine geçmez. [Docker paketleri](https://docs.docker.com/engine/install/centos/), [Oracle'ın Docker deposu kullanan kurulum örneği](https://docs.oracle.com/en/solutions/oci-free-wordpress-docker/install-and-configure1.html).
+
+Kurulum betiği SSH veya güvenlik duvarı kurallarını değiştirmez, Docker grubuna kullanıcı eklemez ve Run Command için sudo yetkisi vermez. Yönetim erişimleri yalnızca açıkça onaylanan kaynaklar için ayrıca kurulur ve uygulamadan önce sınanır. Mevcut sunucunun değiştirilmesi veya test senaryolarının silinmesi Google hesabının geçmiş harcamasını sıfırlamaz; mevcut kullanım kaydı uzlaştırılmadan ücretli Google çağrıları açılmaz.
+
 Testleri geçen commit `/opt/ortak` içine alınır. Docker ve Compose resmî Docker kaynağından kurulur. `deploy/.env.example` üretim için örnektir; gerçek `.env` özel kalır ve `0600` izinle tutulur. Alan adı sunucu IP'sinin `nip.io` karşılığıdır. API ve web imajları başarılı GitHub Actions işinin ARM64 digest değerleriyle sabitlenir. İmajların sunucudan erişilebilirliği doğrulanır; paket görünürlüğü doğrulanmadan dağıtım hazır sayılmaz.
 
 ```bash

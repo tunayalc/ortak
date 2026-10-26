@@ -29,7 +29,7 @@ services:
       LLM_PROVIDER: ollama
       OLLAMA_MODEL: llama3:8b
       GOOGLE_LEDGER_WATERMARK_PATH: /guard/google-watermark.json
-    volumes: ["./data:/data", "./guard:/guard", "./backups:/backups"]
+    volumes: ["./data:/data:Z", "./guard:/guard:Z", "./backups:/backups:Z"]
     networks:
       public:
         ipv4_address: 172.30.0.3

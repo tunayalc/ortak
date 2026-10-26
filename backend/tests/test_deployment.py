@@ -25,6 +25,38 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 from deploy import operations
 
 
+@pytest.mark.parametrize("os_id,version,expected", [
+    ("ol", "9", "oracle-linux-9"),
+    ("ol", "9.7", "oracle-linux-9"),
+    ("ubuntu", "24.04", "ubuntu-24.04"),
+])
+def test_bootstrap_readonly_platform_check(os_id, version, expected):
+    script = Path(__file__).resolve().parents[2] / "deploy/bootstrap.sh"
+    result = subprocess.run(["bash", str(script), "--check-platform", os_id, version], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert result.stdout.strip() == expected
+
+
+@pytest.mark.parametrize("os_id,version", [("ol", "8.10"), ("ol", "10"), ("ubuntu", "24.10"), ("debian", "12")])
+def test_bootstrap_rejects_unreviewed_platforms_without_installing(os_id, version):
+    script = Path(__file__).resolve().parents[2] / "deploy/bootstrap.sh"
+    result = subprocess.run(["bash", str(script), "--check-platform", os_id, version], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "nothing installed" in result.stderr
+
+
+def test_bootstrap_shell_syntax():
+    script = Path(__file__).resolve().parents[2] / "deploy/bootstrap.sh"
+    subprocess.run(["bash", "-n", str(script)], check=True, capture_output=True)
+
+
+def test_api_persistent_directories_have_private_selinux_labels():
+    config = yaml.safe_load((Path(__file__).resolve().parents[2] / "deploy/compose.yaml").read_text())
+    mounts = config["services"]["api"]["volumes"]
+    assert mounts == ["./data:/data:Z", "./guard:/guard:Z", "./backups:/backups:Z"]
+
+
 def test_warmup_requires_installed_model_and_confirms_loaded(monkeypatch):
     def configuration(**kwargs):
         assert kwargs == {"require_google_disabled": False}

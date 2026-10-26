@@ -196,6 +196,42 @@ def test_healthy_refresh_is_scheduled_before_seven_day_expiry(production, monkey
     assert delays == [6 * 3600] and refresh.await_count == 1
 
 
+def test_closed_google_calls_still_refresh_public_prices_without_resetting_usage(production, monkeypatch):
+    google_usage.reserve_call("geocoding", 1)
+    with get_conn() as conn:
+        before = [dict(row) for row in conn.execute("SELECT * FROM google_api_usage ORDER BY id")]
+    monkeypatch.setenv("GOOGLE_PRICE_AUTO_REFRESH_ENABLED", "true")
+    monkeypatch.setenv("GOOGLE_MAPS_CALLS_ENABLED", "false")
+    monkeypatch.setenv("GOOGLE_PRICE_VERIFIED_AT", (datetime.now(timezone.utc) - timedelta(days=8)).isoformat())
+    get_settings.cache_clear()
+    async def refresh():
+        prices.save_snapshot(snapshot())
+    reference_refresh = AsyncMock(side_effect=refresh)
+    monkeypatch.setattr(prices, "refresh_once", reference_refresh)
+    async def stop(_delay):
+        raise asyncio.CancelledError
+    monkeypatch.setattr(prices.asyncio, "sleep", stop)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(prices.refresh_loop())
+    reference_refresh.assert_awaited_once()
+    assert google_usage.verified_prices() == snapshot().unit_prices_tl
+    assert not get_settings().google_maps_calls_enabled
+    assert not google_usage.usage_status()["available"]
+    with get_conn() as conn:
+        assert [dict(row) for row in conn.execute("SELECT * FROM google_api_usage ORDER BY id")] == before
+
+
+@pytest.mark.parametrize("setting,value", [("GOOGLE_PRICE_AUTO_REFRESH_ENABLED", "false"), ("GOOGLE_MAPS_API_KEY", "")])
+def test_production_refresh_respects_disabled_refresher_or_missing_key(production, monkeypatch, setting, value):
+    monkeypatch.setenv("GOOGLE_PRICE_AUTO_REFRESH_ENABLED", "true")
+    monkeypatch.setenv(setting, value)
+    get_settings.cache_clear()
+    refresh = AsyncMock()
+    monkeypatch.setattr(prices, "refresh_once", refresh)
+    asyncio.run(prices.refresh_loop())
+    refresh.assert_not_awaited()
+
+
 def test_local_or_disabled_instance_never_starts_reference_fetch(monkeypatch):
     refresh = AsyncMock()
     monkeypatch.setattr(prices, "refresh_once", refresh)

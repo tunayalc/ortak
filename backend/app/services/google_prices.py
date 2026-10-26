@@ -208,8 +208,9 @@ async def refresh_once() -> PriceSnapshot:
 
 async def refresh_loop() -> None:
     settings = get_settings()
+    # Public references must be ready before billable calls can be enabled.
     if not (settings.production and settings.google_price_auto_refresh_enabled
-            and settings.has_google_key and settings.google_maps_calls_enabled):
+            and settings.has_google_key):
         return
     while True:
         try:

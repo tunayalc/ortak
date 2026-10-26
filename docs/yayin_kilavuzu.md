@@ -113,6 +113,25 @@ Ubuntu ARM64 sunucusunda SSH yalnızca yönetici IP'sine `/32` ile açılır. HT
 
 ## Üretim kurulumu
 
+### IP'den bağımsız kalıcı yönetim
+
+Oracle Linux 9 sunucusu, Oracle'ın Run Command kanalıyla yönetilebilir. Bu kanal için bilgisayarın değişen IP adresini SSH listesine eklemek veya özel SSH anahtarını Cloud Shell'e yüklemek gerekmez. Kalıcı IAM izni ve sunucudaki sınırlı sudo izni ayrı güvenlik değişiklikleridir; ikisi de yalnızca kullanıcı açıkça onayladıktan sonra etkinleştirilir. Bu bölüm kurulum yöntemidir, mevcut sunucuda etkinleştirildiği iddiası değildir. [Oracle Run Command belgeleri](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/runningcommands.htm).
+
+Dinamik grubun üyelik kuralı yalnızca tek ORTAK makinesinin `instance.id` değerini içermelidir. Gruba, `instance-agent-command-execution-family` için yalnızca kendi görevlerini alma ve sonuçlandırma izni verilir; `request.instance.id=target.instance.id` koşulu korunur. Başka makinelere, Object Storage'a veya genel kaynak yönetimine erişim verilmez. Komut gönderen yönetici mevcut Oracle kimlik doğrulamasını kullanır. [Resmî IAM örneği](https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/instances.htm).
+
+Sunucu tarafında `deploy/install_command_admin.sh --confirmed-permanent-instance-access`, kullanıcı onayının ardından root olarak çalıştırılır. Betik, root'a ait sınırlı bir başlatıcı kurar. `ocarun` hesabı yalnızca `/usr/local/sbin/ortak-admin` komutunu sudo ile çalıştırabilir; Docker grubuna eklenmez ve genel `NOPASSWD: ALL` yetkisi almaz. Mevcut beklenmeyen sudo erişimi varsa kurulum durur. Sudoers sözdizimi gerçek `visudo` ile doğrulanır.
+
+İzin verilen işlemler `status`, `verify`, `apply`, `rollback`, `warmup`, `health` ve `backup` ile sınırlıdır. Ek argüman, komut çalıştırma, dosya yolu, bütçe değiştirme veya boş kullanım sayacı oluşturma seçeneği yoktur. Programlar ve özel yapılandırma root'a ait olmalı; sembolik bağlantılar ve başka kullanıcıların yazabildiği dosyalar reddedilir. Python yalıtılmış modda ve temiz ortam değişkenleriyle çalışır. İşlem kilidi çakışan yönetim görevlerini engeller. Alt süreç çıktıları Oracle komut yanıtına aktarılmaz; yalnızca kısa başarı/hata bilgisi döner.
+
+```bash
+sudo -n /usr/local/sbin/ortak-admin status
+sudo -n /usr/local/sbin/ortak-admin health
+```
+
+`status` yanıtı yönetim kanalını ve Docker hizmetini doğrular; uygulamanın canlı kabulü değildir. `health` ve dış HTTPS kontrolü ayrıca geçmelidir. `apply` ve `rollback`, mevcut Google-kapalı kurulum kuralını korur. İmaj digest değerleri yönetici tarafından doğrulanmış üretim yapılandırmasından gelir; bu kanal her GitHub gönderimini otomatik yayımlamaz. `warmup` yalnızca kurulu Llama modelini yükler. Google bütçesi, günlük kota ve kullanım kaydı bu yetkiyle artırılamaz veya sıfırlanamaz. Sunucudaki mevcut yeniden başlatma, sağlık ve yedekleme hizmetleri ayrıca kurulur ve gerçek çalışma sonuçlarıyla doğrulanır.
+
+Kalıcı yönetim kanalı SSH'yi internete açmaz; FastAPI ve Ollama portları da özel kalır. Oracle hesabının yetkisiz ele geçirilmesi yine risktir; hesap doğrulaması ve tek makineyle sınırlı IAM kuralı korunmalıdır. İlk kurulumda yönetim erişimi yoksa bu başlatıcı, aynı makinenin onaylı açılış yapılandırmasıyla kurulur; yeni ücretli kaynak açılmaz ve mevcut kullanım kaydı korunur.
+
 Temiz kurulumda tercih edilen platform Oracle Linux 9 ARM64'tür. `deploy/bootstrap.sh`, önce platformu kontrol eder; Oracle Linux 9 ve mevcut Ubuntu 24.04 yolu dışında paket kurmaz. `bash deploy/bootstrap.sh --check-platform ol 9.7` komutu hiçbir sistem değişikliği yapmadan platform seçimini doğrular.
 
 Oracle Linux yolunda Docker'ın imzalı EL9 paket deposu kullanılır; imza anahtarının parmak izi doğrulanmadan paketler kurulmaz. Docker'ın SELinux desteği etkinleştirilir ve API veri/guard/yedek bağlamaları özel `:Z` etiketiyle açılır. SELinux kapatılmaz. Ubuntu kurulumu korunur. Oracle Linux paket uyumluluğu, gerçek yeni ARM64 makinede `docker info`, `docker compose version` ve uygulama sağlık kontrolleriyle ayrıca doğrulanır; platform birim testi gerçek makine kurulumunun yerine geçmez. [Docker paketleri](https://docs.docker.com/engine/install/centos/), [Oracle'ın Docker deposu kullanan kurulum örneği](https://docs.oracle.com/en/solutions/oci-free-wordpress-docker/install-and-configure1.html).

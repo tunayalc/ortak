@@ -77,8 +77,9 @@ def usage_status() -> dict[str, object]:
         "usage_day": day,
         "timezone": "Europe/Istanbul",
         "scope": "this_backend_database",
-        "budget_enforced": settings.google_budget_protected,
-        "budget_limit_tl": settings.google_budget_limit_tl,
+        "budget_enforced": settings.google_budget_cap_enforced,
+        "budget_limit_tl": settings.google_budget_limit_tl if settings.google_budget_cap_enforced else None,
+        "usage_accounting_enforced": settings.google_budget_protected,
     }
     status["available"] = settings.google_maps_calls_enabled and used < settings.google_maps_daily_call_limit
     status["unavailable_reason"] = "" if status["available"] else "Google işlemleri şu anda kapalı veya günlük kota dolu."
@@ -89,8 +90,8 @@ def usage_status() -> dict[str, object]:
                 verify_ledger(conn)
                 spent = estimated_spend(conn, max(prices.values()))
                 status["service_remaining"] = service_remaining(conn, day)
-            status.update(estimated_cost_tl=round(spent, 4), budget_limit_tl=settings.google_budget_limit_tl)
-            if spent + max(prices.values()) > settings.google_budget_limit_tl:
+            status.update(estimated_cost_tl=round(spent, 4))
+            if settings.google_budget_cap_enforced and spent + max(prices.values()) > settings.google_budget_limit_tl:
                 raise GoogleUsageBlocked("Güvenlik payı ayrılmış kullanım bütçesi doldu; yeni Google çağrısı yapılmayacak.")
         except GoogleUsageBlocked as exc:
             status.update(available=False, unavailable_reason=str(exc))
@@ -107,7 +108,7 @@ def ensure_capacity(required: int = 1) -> None:
     if settings.google_budget_protected:
         worst = max(verified_prices().values())
         with get_conn() as conn:
-            if estimated_spend(conn, worst) + required * worst > settings.google_budget_limit_tl:
+            if settings.google_budget_cap_enforced and estimated_spend(conn, worst) + required * worst > settings.google_budget_limit_tl:
                 raise GoogleUsageBlocked("İşlem için bütçe kapasitesi yetersiz; yeni Google çağrısı yapılmadı.")
 
 
@@ -138,7 +139,7 @@ def operation_capacity(operations: dict[str, int], status: dict | None = None) -
             if not reason:
                 prices = verified_prices()
                 cost = sum(count * prices[key] for key, count in counts.items())
-                if status["estimated_cost_tl"] + cost > settings.google_budget_limit_tl + 1e-8:
+                if settings.google_budget_cap_enforced and status["estimated_cost_tl"] + cost > settings.google_budget_limit_tl + 1e-8:
                     reason = "Seçilen işlem için korunan kullanım bütçesi yetersiz."
     return {"available": not reason, "reason": reason}
 
@@ -183,7 +184,7 @@ def reserve_call(operation: str, attempt: int) -> int:
             service = next(key for key, operations in SERVICE_OPERATIONS.items() if operation in operations)
             if service_remaining(conn, day)[service] <= 0:
                 raise GoogleUsageBlocked("Bu Google servisinin günlük kotası doldu; yeni istek gönderilmedi.")
-            if estimated_spend(conn, worst) + price > settings.google_budget_limit_tl:
+            if settings.google_budget_cap_enforced and estimated_spend(conn, worst) + price > settings.google_budget_limit_tl:
                 raise GoogleUsageBlocked("Güvenlik payı ayrılmış kullanım bütçesi doldu; istek gönderilmedi.")
             conn.execute("UPDATE google_api_usage SET estimated_cost_tl = ? WHERE estimated_cost_tl IS NULL", (worst,))
         cursor = conn.execute(

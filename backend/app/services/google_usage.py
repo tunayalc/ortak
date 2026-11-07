@@ -27,6 +27,8 @@ def verify_ledger(conn):
 
 
 def service_remaining(conn, day):
+    if not get_settings().google_daily_quota_enabled:
+        return dict.fromkeys(SERVICE_LIMITS)
     used = {row["operation"]: row["count"] for row in conn.execute("SELECT operation, COUNT(*) AS count FROM google_api_usage WHERE usage_day = ? GROUP BY operation", (day,))}
     return {service: max(0, limit - sum(used.get(operation, 0) for operation in SERVICE_OPERATIONS[service])) for service, limit in SERVICE_LIMITS.items()}
 
@@ -70,18 +72,20 @@ def usage_status() -> dict[str, object]:
         used = conn.execute("SELECT COUNT(*) FROM google_api_usage WHERE usage_day = ?", (day,)).fetchone()[0]
     status = {
         "calls_enabled": settings.google_maps_calls_enabled,
-        "daily_limit": settings.google_maps_daily_call_limit,
+        "daily_quota_enforced": settings.google_daily_quota_enabled,
+        "daily_limit": settings.google_maps_daily_call_limit if settings.google_daily_quota_enabled else None,
         "max_attempts_per_request": settings.google_maps_max_attempts,
         "used_today": used,
-        "remaining_today": max(0, settings.google_maps_daily_call_limit - used),
+        "remaining_today": max(0, settings.google_maps_daily_call_limit - used) if settings.google_daily_quota_enabled else None,
         "usage_day": day,
         "timezone": "Europe/Istanbul",
         "scope": "this_backend_database",
+        "provider_quotas_managed_externally": True,
         "budget_enforced": settings.google_budget_cap_enforced,
         "budget_limit_tl": settings.google_budget_limit_tl if settings.google_budget_cap_enforced else None,
         "usage_accounting_enforced": settings.google_budget_protected,
     }
-    status["available"] = settings.google_maps_calls_enabled and used < settings.google_maps_daily_call_limit
+    status["available"] = settings.google_maps_calls_enabled and (not settings.google_daily_quota_enabled or used < settings.google_maps_daily_call_limit)
     status["unavailable_reason"] = "" if status["available"] else "Google işlemleri şu anda kapalı veya günlük kota dolu."
     if settings.google_budget_protected:
         try:
@@ -102,8 +106,10 @@ def ensure_capacity(required: int = 1) -> None:
     status = usage_status()
     if not status["calls_enabled"]:
         raise GoogleUsageBlocked("Google Maps çağrıları kapalı. Faturalandırma ve harcama onayından sonra GOOGLE_MAPS_CALLS_ENABLED=true ayarlanmalıdır.")
-    if required > status["remaining_today"]:
+    if status["remaining_today"] is not None and required > status["remaining_today"]:
         raise GoogleUsageBlocked("Google Maps günlük yerel çağrı sınırı yetersiz. Yeni istek gönderilmedi; kota ve kullanım kaydını kontrol edin.")
+    if not status["available"]:
+        raise GoogleUsageBlocked(status["unavailable_reason"])
     settings = get_settings()
     if settings.google_budget_protected:
         worst = max(verified_prices().values())
@@ -126,14 +132,15 @@ def operation_capacity(operations: dict[str, int], status: dict | None = None) -
     reason = ""
     if not status["calls_enabled"]:
         reason = "Google kullanımı şu anda kapalı."
-    elif sum(counts.values()) > status["remaining_today"]:
+    elif status["remaining_today"] is not None and sum(counts.values()) > status["remaining_today"]:
         reason = "Seçilen işlem için günlük Google kotası yetersiz."
     elif settings.google_budget_protected:
         if "estimated_cost_tl" not in status or "service_remaining" not in status:
             reason = status.get("unavailable_reason") or "Bütçe ve kullanım kaydı doğrulanamadı."
         else:
             for service, names in SERVICE_OPERATIONS.items():
-                if sum(counts.get(name, 0) for name in names) > status["service_remaining"][service]:
+                remaining = status["service_remaining"][service]
+                if remaining is not None and sum(counts.get(name, 0) for name in names) > remaining:
                     reason = "Seçilen işlem için Google servis kotası yetersiz."
                     break
             if not reason:
@@ -175,14 +182,15 @@ def reserve_call(operation: str, attempt: int) -> int:
         conn.execute("BEGIN IMMEDIATE")
         day = usage_day()
         used = conn.execute("SELECT COUNT(*) FROM google_api_usage WHERE usage_day = ?", (day,)).fetchone()[0]
-        if used >= settings.google_maps_daily_call_limit:
+        if settings.google_daily_quota_enabled and used >= settings.google_maps_daily_call_limit:
             raise GoogleUsageBlocked("Google Maps günlük yerel çağrı sınırına ulaşıldı; yeni istek gönderilmedi.")
         if settings.google_budget_protected:
             verify_ledger(conn)
             if operation not in OPERATIONS:
                 raise GoogleUsageBlocked("Desteklenmeyen Google işlemi; istek gönderilmedi.")
             service = next(key for key, operations in SERVICE_OPERATIONS.items() if operation in operations)
-            if service_remaining(conn, day)[service] <= 0:
+            remaining = service_remaining(conn, day)[service]
+            if remaining is not None and remaining <= 0:
                 raise GoogleUsageBlocked("Bu Google servisinin günlük kotası doldu; yeni istek gönderilmedi.")
             if settings.google_budget_cap_enforced and estimated_spend(conn, worst) + price > settings.google_budget_limit_tl:
                 raise GoogleUsageBlocked("Güvenlik payı ayrılmış kullanım bütçesi doldu; istek gönderilmedi.")

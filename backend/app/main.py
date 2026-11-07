@@ -85,7 +85,7 @@ async def health() -> dict[str, object]:
         "google_configured": settings.has_google_key,
         "google_status": "configured_not_verified" if settings.has_google_key else "unconfigured",
         "google_services": ["Places API (New)", "Routes API", "Geocoding API"],
-        "google_usage": {key: usage[key] for key in ("calls_enabled", "available", "budget_enforced", "budget_limit_tl", "usage_accounting_enforced", "max_attempts_per_request")} if settings.production else usage,
+        "google_usage": {key: usage[key] for key in ("calls_enabled", "available", "budget_enforced", "budget_limit_tl", "usage_accounting_enforced", "daily_quota_enforced", "provider_quotas_managed_externally", "max_attempts_per_request")} if settings.production else usage,
         **(await llm_status()),
         **({} if settings.production else {"osrm_base_url": settings.osrm_base_url}),
     }
@@ -104,6 +104,7 @@ def runtime_config(request: Request):
         "session_ttl_seconds": session_store.SESSION_TTL_SECONDS,
         "google_available": settings.has_google_key and usage.get("available", False),
         "google_remaining_requests": usage["remaining_today"],
+        "google_daily_quota_enforced": usage["daily_quota_enforced"],
         "google_service_remaining": usage.get("service_remaining", {}),
         "google_unavailable_reason": usage.get("unavailable_reason", ""),
         "google_search_capacity": search_capacity(usage),

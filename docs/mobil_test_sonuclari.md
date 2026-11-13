@@ -15,6 +15,10 @@ Bu kayıt mağaza kabulü veya canlı mobil uçtan uca başarı belgesi değildi
   hatasıyla kesildi; son tam çalışmada 42/42 başarı doğrulandı.
 - Mobilde 25 test, TypeScript kontrolü ve iOS/Android/web export başarılıdır.
   Bunlar üretim imzalı IPA/AAB veya fiziksel cihaz kabulü değildir.
+- İlk GitHub mobil kontrolü, Expo'nun uyumlu yama sürümleri nedeniyle 19/20
+  sonucuyla durdu. `expo` 58.0.25 ve `expo-location` 58.0.22 sürümlerine
+  sabitlendi; Doctor 20/20, TypeScript, 25 test ve üç platform export yeniden
+  başarılı tamamlandı. Kontrol devre dışı bırakılmadı.
 - Gerçek yerel `llama3:8b` ile beş plan yorumlama senaryosunun tamamı geçti;
   yanıt süreleri yaklaşık 3,6-5 saniyeydi. İlk denemedeki iki yorumlama hatası
   sonrasında istem düzeltildi; ilk başarısız kayıt özel arşivde korundu.

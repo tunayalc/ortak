@@ -2,6 +2,54 @@
 
 ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışan kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi tek başına sunucu kabulü değildir; aşağıdaki kayıtlar gerçek sunucu kanıtlarını ayrı gösterir.
 
+## 13 Kasım 2026: Vercel Korundu, Ana Adres Birleştirildi
+
+- Kullanıcının son tercihiyle Vercel'den Oracle'a arayüz taşıma işlemi iptal edildi. Arayüz Vercel'de; API, kalıcı kullanım kaydı ve Ollama Oracle'da kalır. Gateway istek bazlı HTTPS vekilidir; kişisel bilgisayarda açık tutulması gereken bir tünel yoktur.
+- `ortak.web.tr` DNS kaydı çözülüyor. Vercel yönetim API'si alan adını doğrulanmış, DNS yapılandırmasını hatasız ve SSL sertifikasını verilmiş olarak gösterdi.
+- `ortak-2209.vercel.app` ve `orak-2209.vercel.app` için ana adrese 308 yönlendirmeleri kaydedildi ve yönetim API'sinden tekrar okundu. `www.ortak.web.tr` yönlendirmesi korundu. Ana adres başka adrese yönlenmiyor; döngü yok. Bu ayarlar proje alan adı katmanındadır; yeni uygulama derlemesi gerektirmez. Eski adreste açık kalmış oturumlar ana adreste yeniden oluşturulur.
+- Mevcut üretim dağıtımı değiştirilmedi. Yeni iki motorlu web/mobil kaynakları ayrı yayın hazırlığıdır. Oracle yönetimi yeniden giriş istediğinden yeni API imajı henüz sunucuya uygulanmadı. Yeni motorların üretim kabulü tamamlandı denemez.
+- Yerelde 319 backend, 42 masaüstü/mobil web ve 9 gateway/aktarım testi geçti. Mobilde 25 test, TypeScript ve üç platform export başarılıdır. Gerçek yerel `llama3:8b` plan yorumlama seti 5/5 geçti; Google çağrısı yapılmadı. Bu, Oracle model kabulü veya mağaza yayını değildir.
+- Canlı sitenin görsel testi kayıtlı tarayıcı erişim iznine takıldı; alternatif tarayıcı veya HTTP istemcisiyle bu engel aşılmadı. DNS/sertifika/yönlendirme yönetim kayıtları, uçtan uca tarayıcı kabulünden ayrı tutulur. Yeni ödeme, kaynak veya otomasyon oluşturulmadı.
+
+## 12 Kasım 2026: Özel Alan Adı
+
+- `ortak.web.tr` beş yıllığına tescil edildi; otomatik yenileme kapatıldı. Ek hosting, e-posta veya SSL paketi alınmadı. Ödeme belgeleri özel mali arşivde tutulur.
+- Alastyr ParkDNS üzerinde `@` ve `www` A kayıtları `76.76.21.21` adresine yönlendirildi. İki adres mevcut `ortak-2209` Vercel projesine eklendi; `www` için ana adrese 308 yönlendirmesi tanımlandı. Oracle API ve Llama taşınmadı.
+- Canlı Vercel sürümünün kaynakları alınarak yalnızca gateway'in tam alan adı izinlerine `https://ortak.web.tr` ve `https://www.ortak.web.tr` eklendi. İlgisiz yerel mobil/tema değişiklikleri yayımlanmadı. Alt alan adı taklitleri ve HTTP reddedilir; oturum ve CSRF kontrolleri korunur.
+- Altı gateway testi ve üretim derlemesi başarılıdır. `dpl_HtcXQUYETCihBbNduEiVVjACATr1` üretime alındı; önceki sürüm `dpl_75y2ZRNUyfh3catooa8zdg6TomUa` geri dönüş için korunur. Yayın öncesi geçici test erişimi kaldırıldı.
+- Mevcut Vercel adresinde sağlık yanıtı başarılı, gerçek `llama3:8b` hazır ve yeni Google arama kapasitesi açık görüldü. Bu alan adı değişikliği için ücretli Google çağrısı veya yeni Llama üretimi yapılmadı.
+- Son kontrolde TRABİS yetkili DNS sunucusu henüz alan adını yayımlamıyordu. Yeni adreste dış HTTPS ve tarayıcı kabulü bu nedenle tamamlanmış sayılmaz. Ayrıca mevcut Vercel adresinin görsel testi, Codex'in kayıtlı tarayıcı erişim iznine takıldı. DNS yayılımından ve erişim izninden sonra ana adres/`www`, HTTPS, oturum ve öneri akışı doğrulanmalıdır. Özel takip kaydı: `output/deployment/domain-20261112/`.
+- Aynı gün Alastyr canlı desteği, nameserver değişikliğinin yeni olduğunu ve çözümlenmenin birkaç saat sürebileceğini bildirdi. Bu yanıt DNS/HTTPS kabulü yerine geçmez; DNS kayıtlarını yeniden oluşturmak veya yeni ücretli hosting almak gerekmez.
+- Son yerel teknik kontrolde 286 backend testi, 6 gateway testi ve 23 mobil test geçti; web derlemesi, mobil TypeScript/native yapılandırma ve üç platform export başarılıdır. Gateway testleri CI yapılandırmasına eklendi. Bu hazırlık değişiklikleri henüz GitHub'a gönderilmedi ve yeni bir canlı sürüm yayımlanmadı.
+
+## 7 Kasım 2026: Günlük Pilot Sınırının Kaldırılması
+
+- [ORTAK](https://ortak-2209.vercel.app/) arayüzü Vercel'de, API ve gerçek `llama3:8b` mevcut Oracle sunucusunda çalışır. Bu bölüm güncel durumu gösterir; aşağıdaki tarihli bölümlerin sınır ve kapasite değerleri geçmiş kayıtlarıdır.
+- Kullanıcının açık isteğiyle `GOOGLE_DAILY_QUOTA_ENABLED=false` canlıya uygulandı. Uygulamadaki günlük 33 ve servis bazlı 3/3/27 durdurma koşulları artık uygulanmaz. Önceden kaldırılan toplam 100 TL sınırı da kapalıdır. Kalıcı kullanım kaydı, guard, fiyat doğrulaması ve kısa süreli oturum/IP hız sınırları korunur; sayaç sıfırlanmadı.
+- Google projesinde Nearby Search günlük sınırı pilot değerinden 75.000 varsayılanına, Geocoding ve Compute Routes günlük sınırları sınırsız değerine getirildi. Google'ın dakika başına kotaları ve hizmet koşulları devam eder. Bu değişiklik ücretsiz veya kesintisiz kullanım garantisi değildir; yeni kullanım hesaba ücret yansıtabilir.
+- `404dd5f` sürümünün 247 backend testi ve [CI/ARM64 işleri](https://github.com/tunayalc/ortak/actions/runs/42350992112) başarılıdır. Sabitlenmiş API imajı mevcut sunucuya kuruldu. Doğrulama, dağıtım, Google etkinleştirme, model hazırlığı, sağlık ve yedekleme görevleri başarılı tamamlandı.
+- Gerçek üretim tarayıcısı kabulü 25/25 geçti. Llama yanıtı 62,931 saniyede alındı; kullanıcı onayı öncesi değerlerin korunması ve onay sonrası 2/1/1 kişi ağırlıkları doğrulandı. Üç gerçek Google mekânı ve dokuz geçerli rota için 1 Places + 9 Routes çağrısı yapıldı; yeniden deneme olmadı. Profil, kişi ağırlığı ve filtre değişiklikleri ek Google çağrısı üretmedi.
+- 390/1440 piksel, açık/koyu tema, klavye kullanımı ve yalnızca hedefi içeren yol tarifi bağlantıları başarılıdır. Test senaryosu silindi. Testten sonra Google araması hâlâ kullanılabilir, Llama hazır ve HTTPS sağlık yanıtı başarılıdır. Özel kabul kaydı `output/deployment/daily-quota-live-20261107/run.json` altında tutulur; ham konum, tercih veya Google içeriği içermez ve GitHub'a gönderilmez.
+- Geçici seri konsolun `DELETED` durumu doğrulandı; bu bakıma ait Cloud Shell anahtarları ve terminal oturumu kaldırıldı. Kalıcı yetki genişletilmedi. Mevcut diskler, model ve kullanım geçmişi korundu; yeni sunucu, ödeme veya bakiye yükleme yapılmadı. Silinen Codex otomasyonu yeniden kurulmadı.
+
+## 6 Kasım 2026: Vercel ve Toplam Bütçe Sınırı
+
+- Güncel arayüz adresi [ORTAK](https://ortak-2209.vercel.app/); FastAPI ve `llama3:8b` mevcut Oracle sunucusunda çalışır. Aşağıdaki tarihli kabul kayıtları geçmiş sürümlerin kanıtlarıdır.
+- Kullanıcının açık isteğiyle toplam 100 TL durdurma koşulu kaldırıldı: `GOOGLE_LIFETIME_BUDGET_ENABLED=false`. Bu ayar günlük Google kotalarını, hız sınırlarını, fiyat doğrulamasını veya kalıcı kullanım kaydını kapatmaz. `GOOGLE_BUDGET_ENFORCEMENT_ENABLED=true` korunur; API `budget_enforced=false`, `budget_limit_tl=null`, `usage_accounting_enforced=true` döndürür.
+- İstek başına deneme sayısı `1` oldu. Günlük 33 ve Geocoding/Places/Routes için 3/3/27 sınırları korunur. Bu yüzden toplam TL tavanı olmaması, sınırsız günlük arama veya ücretsiz Google kullanımı anlamına gelmez.
+- `394ada4` sürümü için 238 backend testi, gateway testleri, üretim derlemesi ve [CI/ARM64 işleri](https://github.com/tunayalc/ortak/actions/runs/42257794890) başarılıdır. Doğrulanmış API imajı sunucuya uygulandı; sayaç ve guard yeniden oluşturulmadı. Sunucu model hazırlığı ve sağlık işlemleri başarılıdır.
+- Geçici seri konsol ve yalnızca bu bakım için oluşturulan Cloud Shell anahtarı kaldırıldı. Yeni sunucu, ödeme veya bakiye yükleme yapılmadı; ücret doğurabilecek Google kullanımı mevcut hesaptan devam eder.
+- `frontend/tests/live_acceptance.mjs` toplam tavanın kapalı olduğu kabul için ayrıca `ORTAK_LIVE_UNCAPPED_APPROVED=1` ister. Test başına 100 TL onay bayrağı, uygulamanın genel bütçesi değildir; tek denemeyle planlanan 10 Google isteğini sınamak içindir. Canlı rapor özel `output/deployment/uncapped-live-20261106/` dizinindedir ve GitHub'a gönderilmez.
+- Yeni yapılandırmayla gerçek üretim tarayıcısı kabulü 24/24 geçti. Llama yanıtı 62,42 saniyede geldi; kullanıcı onayı, 2/1/1 kişi ağırlıkları, üç Google adayı ve dokuz geçerli rota doğrulandı. 1 Places + 9 Routes isteği yapıldı; yeniden deneme olmadı. Profil, delta ve filtre değişiklikleri ek Google çağrısı üretmedi. 390/1440 piksel, açık/koyu tema ve klavye kontrolleri başarılıdır. Test oturumu silindi. Son kontrolde 13 günlük istek ve üç kişilik yeni arama kapasitesi vardı; bu sayı yeni kullanımla değişir. Gerçek fatura tutarı bu test raporundan çıkarılamaz.
+
+## 27 Ekim 2026: Güncel Kurulum
+
+- Güncel adres [ORTAK](https://158.180.36.171.nip.io/). Aşağıdaki 14 ve 17 Ekim kayıtları eski sunucuya aittir; eski adres ve 24 saatlik kabul yeni sunucuya taşınmış sayılmaz.
+- `46faebb` düzeltmesinin [CI çalışması](https://github.com/tunayalc/ortak/actions/runs/40321756634) başarılıdır: 232 backend testi, 34 arayüz testi ve iki ARM64 imajı geçti. Yeni API imajı mevcut sunucuya uygulandı; kurulu model ve kullanım kayıtları yeniden oluşturulmadı.
+- Fiyat yenilemenin Google çağrılarının açık olmasına bağlı kalması giderildi. Ücretli Google çağrıları kapalıyken resmî, herkese açık kaynaklardan fiyat yenileme ve servis kota bilgisinin okunması canlı sunucuda doğrulandı. Bu işlem ücretli Maps isteği değildir.
+- Son dış kontrolde HTTPS, `/api/readyz` ve `/api/health` başarılı, `llama3:8b` hazırdır. Google çağrıları henüz kapalıdır; arayüz bunu gösterir ve öneri üretimini engeller. Bütçe ve mevcut guard doğrulanarak etkinleştirme tamamlanmadan ücretli öneri akışı kullanılabilir sayılmaz.
+- Mevcut 100 TL toplam koruma, günlük sınırlar ve kullanım geçmişi korunur. Silinen Codex otomasyonu yeniden kurulmaz. Bu güncellemede yeni ücretli Google testi veya ödeme yapılmadı.
+
 ## 17 Ekim 2026: Canlı Yayın Kabulü
 
 - Canlı adres: [ORTAK](https://92.5.80.85.nip.io/). Ön yüz, API ve gerçek `llama3:8b` Oracle'da çalışır; kişisel bilgisayarın açık kalması gerekmez.

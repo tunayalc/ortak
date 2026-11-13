@@ -1,0 +1,23 @@
+import { execFileSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const config = require('../app.config.js').expo;
+const generated = JSON.parse(execFileSync(process.execPath, [require.resolve('expo/bin/cli'), 'config', '--type', 'introspect', '--json'], { encoding: 'utf8' }));
+const { ios, android } = generated._internal.modResults;
+assert.equal(ios.infoPlist.NSAppTransportSecurity.NSAllowsArbitraryLoads, false);
+assert.equal(ios.infoPlist.NSLocationAlwaysUsageDescription, undefined);
+assert.equal(ios.infoPlist.NSLocationAlwaysAndWhenInUseUsageDescription, undefined);
+assert.equal(ios.infoPlist.NSMotionUsageDescription, undefined);
+assert.ok(ios.infoPlist.NSLocationWhenInUseUsageDescription.includes('Google Maps'));
+assert.ok(!ios.infoPlist.UIBackgroundModes?.includes('location'));
+assert.equal(config.ios.privacyManifests.NSPrivacyTracking, false);
+assert.ok(config.ios.privacyManifests.NSPrivacyCollectedDataTypes.some(t => t.NSPrivacyCollectedDataType === 'NSPrivacyCollectedDataTypePreciseLocation'));
+const permissions = android.manifest.manifest['uses-permission'].filter(p => p.$['tools:node'] !== 'remove').map(p => p.$['android:name']);
+for (const name of ['ACCESS_BACKGROUND_LOCATION', 'RECORD_AUDIO', 'CAMERA', 'READ_CONTACTS', 'ACTIVITY_RECOGNITION']) assert.ok(!permissions.includes(`android.permission.${name}`));
+assert.ok(!permissions.includes('com.google.android.gms.permission.AD_ID'));
+assert.equal(android.manifest.manifest.application[0].$['android:allowBackup'], 'false');
+assert.equal(config.ios.bundleIdentifier, config.android.package);
+assert.equal(config.updates.enabled, false);
+console.log('Native config verified: foreground-only location, no tracking/unused permissions, no backup, HTTPS, matching identifiers.');

@@ -64,6 +64,21 @@ def test_signed_secure_cookie_and_csrf(production):
         assert response.json()["session_only"] is True
 
 
+def test_planner_shares_csrf_and_llm_rate_limits_without_google_calls(production):
+    from app.services.public_safety import reserve_rate_limits
+    with client(production) as browser:
+        payload = {"city": "Ankara", "group_size": 3}
+        assert browser.post("/plans/recommend", json=payload).status_code == 403
+        result = browser.post("/plans/recommend", json=payload, headers=headers(browser))
+        assert result.status_code == 200
+        assert result.headers["x-ortak-google-calls"] == "0"
+        assert result.headers["cache-control"] == "no-store"
+    settings = get_settings()
+    for path in ["/preferences/interpret", "/plans/interpret", "/plans/interpret"]:
+        assert reserve_rate_limits(settings, "planner-rate", "192.0.2.25", path)
+    assert not reserve_rate_limits(settings, "planner-rate", "192.0.2.25", "/preferences/interpret")
+
+
 def test_sessions_isolated_and_owner_can_delete(production):
     with client(production) as owner, client(production) as stranger:
         auth = headers(owner)

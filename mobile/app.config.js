@@ -1,0 +1,66 @@
+module.exports = {
+  expo: {
+    name: 'ORTAK',
+    slug: 'ortak-mobile',
+    version: '0.1.0',
+    scheme: 'ortak',
+    userInterfaceStyle: 'automatic',
+    icon: './assets/icon.png',
+    ios: {
+      bundleIdentifier: 'com.tunayalc.ortak',
+      buildNumber: '1',
+      supportsTablet: true,
+      infoPlist: {
+        CFBundleDevelopmentRegion: 'tr',
+        CFBundleLocalizations: ['tr'],
+        ITSAppUsesNonExemptEncryption: false,
+        NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
+      },
+      privacyManifests: {
+        NSPrivacyTracking: false,
+        NSPrivacyTrackingDomains: [],
+        NSPrivacyCollectedDataTypes: [
+          'NSPrivacyCollectedDataTypeName',
+          'NSPrivacyCollectedDataTypePreciseLocation',
+          'NSPrivacyCollectedDataTypeCoarseLocation',
+          'NSPrivacyCollectedDataTypeOtherUserContent',
+          'NSPrivacyCollectedDataTypeUserID',
+        ].map(type => ({
+          NSPrivacyCollectedDataType: type,
+          NSPrivacyCollectedDataTypeLinked: true,
+          NSPrivacyCollectedDataTypeTracking: false,
+          NSPrivacyCollectedDataTypePurposes: ['NSPrivacyCollectedDataTypePurposeAppFunctionality'],
+        })),
+      },
+    },
+    android: {
+      package: 'com.tunayalc.ortak',
+      versionCode: 1,
+      allowBackup: false,
+      adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#232427', monochromeImage: './assets/monochrome-icon.png' },
+      permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+      blockedPermissions: [
+        'android.permission.ACCESS_BACKGROUND_LOCATION', 'android.permission.FOREGROUND_SERVICE_LOCATION',
+        'android.permission.ACTIVITY_RECOGNITION', 'com.google.android.gms.permission.ACTIVITY_RECOGNITION',
+        'android.permission.RECORD_AUDIO', 'android.permission.CAMERA', 'android.permission.READ_CONTACTS',
+        'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE',
+        'android.permission.SYSTEM_ALERT_WINDOW', 'com.google.android.gms.permission.AD_ID',
+      ],
+    },
+    web: { bundler: 'metro', favicon: './assets/icon.png', name: 'ORTAK Mobil' },
+    plugins: [
+      ['expo-location', {
+        locationWhenInUsePermission: 'Konumunuz yalnızca seçtiğiniz kişinin buluşma noktası olarak kullanılır. Arama yaptığınızda rota hesabı için Google Maps ile paylaşılır. Link veya koordinat da girebilirsiniz.',
+        locationAlwaysPermission: false,
+        locationAlwaysAndWhenInUsePermission: false,
+        motionUsagePermission: false,
+        locationFullAccuracyPermission: false,
+        isIosBackgroundLocationEnabled: false,
+        isAndroidBackgroundLocationEnabled: false,
+        isAndroidForegroundServiceEnabled: false,
+      }],
+      ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 96, backgroundColor: '#ffffff', dark: { backgroundColor: '#151517' } }],
+    ],
+    updates: { enabled: false },
+  },
+};

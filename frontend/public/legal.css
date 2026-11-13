@@ -1,7 +1,7 @@
-:root { font-family: system-ui, sans-serif; color: #182420; background: #f6f8f7; line-height: 1.65; }
+:root { font-family: "Helvetica Neue", Arial, sans-serif; color: #232427; background: #ffffff; line-height: 1.65; letter-spacing: 0; }
 body { max-width: 760px; margin: 0 auto; padding: 32px 24px 64px; }
-h1 { font-size: 28px; line-height: 1.25; }
-h2 { font-size: 20px; margin-top: 28px; }
-a { color: #08664c; overflow-wrap: anywhere; }
+h1 { font-size: 28px; font-weight: 500; line-height: 1.25; }
+h2 { font-size: 20px; font-weight: 500; margin-top: 28px; }
+a { color: inherit; overflow-wrap: anywhere; text-underline-offset: 3px; }
 li { margin-bottom: 8px; }
-@media (prefers-color-scheme: dark) { :root { color: #ecf2ef; background: #141c19; } a { color: #77dcc0; } }
+@media (prefers-color-scheme: dark) { :root { color: #f5f5f5; background: #151517; } }

@@ -151,6 +151,38 @@ Başarı ölçütleri rapordaki hedeflerle aynı tutulur: maksimum bireysel sür
 - Filtreler sonrasında en az üç geçerli alternatif yoksa sistem rapor hedefini karşılamadığı için uyarı verir.
 - Mevcut PDF dosyasında eski formül ifadeleri bulunduğu için düzenlenebilir kaynak üzerinden güncelleme yapılmalıdır; ayrıntılı değişiklik listesi `docs/rapor_duzeltme_notlari.md` dosyasındadır.
 
+## Buluşma Planı ve Mekân Motorlarının Ayrılması
+
+Ürün, birbirinden bağımsız iki karar akışı sunar. **Mekân bul**, kişi konumları ve
+kriter bazlı delta ağırlıklarıyla gerçek adayları sıralar. **Buluşma Planı** ise
+şehir, semt, kişi sayısı, süre, ekonomik tercih, ortam, tempo ve ilgi alanlarından
+etkinlik fikirleri oluşturur. Planlama ekranına “Henüz bir mekân fikriniz yok mu?”
+çağrısıyla veya bölüm seçicisinden ulaşılır. İki bölüm web ve mobil istemcide
+ayrı formlar ve sonuçlarla çalışır.
+
+Planlayıcıda Llama yalnızca doğal dildeki isteği şeması doğrulanan bir taslağa
+dönüştürür. Taslak incelenip kabul edilmeden form değişmez. Sınırlı etkinlik
+kataloğu; sohbet, doğa, kültür, yemek, çalışma ve yaratıcı buluşma fikirlerini
+destekler. Plan adımları toplam sürenin içinde kalır; eksik şehir veya kişi
+sayısı tahmin edilmez. Süre, ortam ve ilgi kısıtları çelişiyorsa seçenek
+üretilmez. Gerçek etkinlik ilanı, hava durumu, saat, rezervasyon veya fiyat
+doğrulaması yapılmış gibi sunulmaz. Ekonomik tercih kesin TL bütçesi değildir.
+
+Planı incelemek veya seçmek ORTAK'ta arama başlatmaz. **“ORTAK’ta mekân bul”**
+isteğe bağlıdır. Aktarım özeti kabul edilirse şehir, kişi sayısı, kategori ve
+kriter ağırlıkları yeni mekân formuna alınır; eski konumlar ve sonuçlar
+temizlenir. Planlama ekranı kendi içeriğini korur. Semt metninden kişi
+koordinatı üretilmez; kullanıcı konumları ayrıca girer ve aramayı ayrıca
+başlatır. Aktarımın kendisi Google isteği üretmez.
+
+`POST /plans/interpret` mevcut Ollama modeli, ortak model kilidi ve istek
+sınırlamasıyla çalışır; otomatik bulut geçişi yoktur. `POST /plans/recommend`
+model veya Google gerektirmeyen ayrı planlama motorudur. İki uç da mevcut
+oturum/CSRF korumalarına tabidir. Metin ve planlar kalıcı kaydedilmez; istemci
+taslağı iki saat hareketsizlik sonunda veya kullanıcı temizlediğinde silinir.
+Bu yeni ürün akışı araştırmadaki lambda veya kriter sıralama formüllerini
+değiştirmez ve araştırma başarısı yerine değerlendirilmez.
+
 ## Google Maps Canlı Doğrulama ve Kayıt Katmanı
 
 Ürün, yeni Google Cloud projeleriyle uyum için Places API (New) ve Routes API kullanır; Geocoding API şehir veya metin konumlarını çözer. API anahtarının tanımlı olması gerçek bağlantı doğrulaması sayılmaz. Canlı deneyde veri kaynağı, kişi-aday matrisinin tamamlanması, HTTP yanıt süreleri, çağrı sayıları ve model kontrolleri ayrı ayrı doğrulanır. Sentetik veya OSRM sonuçları Google canlı test başarısı yerine kullanılamaz.

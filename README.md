@@ -18,6 +18,15 @@ ORTAK (Optimum Rota Tabanlı Adil Kesişim), grup buluşmaları için açıklana
 
 ## Hızlı Başlangıç
 
+Web arayüzünün ana adresi [ortak.web.tr](https://ortak.web.tr/). Arayüz
+Vercel'de, API ve Ollama Oracle'da çalışır; bilgisayarda açık bir tünel gerekmez.
+Yeni Buluşma Planı motorunun kaynakları hazırdır; üretime kurulumu ve kabulü
+[yayın kaydında](docs/yayin_kilavuzu.md) mevcut sürümden ayrı izlenir.
+
+iOS ve Android istemcisi için [mobil kurulum kılavuzuna](mobile/README.md),
+mağaza öncesi kalan adımlar için [mobil yayın kontrolüne](docs/mobil_yayin_kontrolu.md)
+bakın. Mobil sürüm geliştirme aşamasındadır; henüz mağazalarda yayımlanmadı.
+
 Backend:
 
 ```bash

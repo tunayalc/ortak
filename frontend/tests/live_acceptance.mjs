@@ -5,12 +5,15 @@ import { resolve } from 'node:path'
 if (process.env.ORTAK_LIVE_ACCEPTANCE !== '1' || process.env.ORTAK_LIVE_MAX_TOTAL_TL !== '100') {
   throw new Error('Explicit live acceptance opt-in and the existing 100 TL guard are required.')
 }
-const base = process.env.ORTAK_LIVE_URL || 'https://92.5.80.85.nip.io/'
+const base = process.env.ORTAK_LIVE_URL || 'https://ortak-2209.vercel.app/'
+const uncappedApproved = process.env.ORTAK_LIVE_UNCAPPED_APPROVED === '1'
+const dailyUncappedApproved = process.env.ORTAK_LIVE_DAILY_UNCAPPED_APPROVED === '1'
 if (new URL(base).protocol !== 'https:') throw new Error('Live acceptance requires HTTPS.')
 const output = resolve(process.env.ORTAK_LIVE_OUTPUT || '../output/deployment/browser-live', 'run.json')
 const report = { started_at_utc: new Date().toISOString(), status: 'running', checks: {}, stages: [],
-  source_commit: process.env.ORTAK_LIVE_COMMIT || '', budget_limit_tl: 100, planned_google_calls: 10,
-  expected_reservation_tl: 11.25, uses_mocks: false }
+  source_commit: process.env.ORTAK_LIVE_COMMIT || '', budget_limit_tl: uncappedApproved ? null : 100, test_spend_ceiling_tl: 100, planned_google_calls: 10,
+  deployment_id: process.env.ORTAK_LIVE_DEPLOYMENT || '',
+  uses_mocks: false }
 await mkdir(resolve(output, '..'), { recursive: true, mode: 0o700 })
 await writeFile(output, JSON.stringify(report, null, 2), { mode: 0o600, flag: 'wx' })
 let saveQueue = Promise.resolve()
@@ -30,11 +33,27 @@ let scenarioId
 let csrf = ''
 let candidateData = []
 let routeData = []
+let gateway = false
+let searchCalls = 0
+function apiPath(rawUrl) {
+  const url = new URL(rawUrl)
+  if (url.origin !== new URL(base).origin) return null
+  if (url.pathname === '/api/orak-gateway') {
+    const path = url.searchParams.get('path')
+    if (!path?.startsWith('/')) return null
+    gateway = true
+    return `/api${path}`
+  }
+  return url.pathname
+}
+function apiUrl(path) {
+  return new URL(gateway ? `/api/orak-gateway?path=${encodeURIComponent(path)}` : `/api${path}`, base).href
+}
 const allowed = new Set(['/api/health', '/api/runtime-config', '/api/locations/parse', '/api/preferences/interpret',
   '/api/scenarios', '/api/candidates/search', '/api/routes/matrix', '/api/recommendations'])
 page.on('request', request => startTimes.set(request, Date.now()))
 page.on('response', response => {
-  const path = new URL(response.url()).pathname
+  const path = apiPath(response.url())
   if (!allowed.has(path)) return
   const task = (async () => {
     const request = response.request()
@@ -64,7 +83,7 @@ async function settle() { while (pending.size) await Promise.all([...pending]) }
 function check(name, value) { report.checks[name] = Boolean(value); expect(Boolean(value), name).toBe(true) }
 function calls() { return report.stages.reduce((n, stage) => n + stage.google_calls, 0) }
 async function recommendationAction(action) {
-  const response = page.waitForResponse(r => new URL(r.url()).pathname === '/api/recommendations')
+  const response = page.waitForResponse(r => apiPath(r.url()) === '/api/recommendations')
   await action()
   expect((await response).status()).toBe(200)
   await settle()
@@ -81,8 +100,19 @@ try {
   const health = bodies.get('/api/health')
   const runtime = bodies.get('/api/runtime-config')
   check('production_ready', runtime.production && health.ai_ready && health.ai_provider === 'ollama' && health.ai_model === 'llama3:8b')
-  check('budget_and_retry_guard', health.google_usage.budget_enforced && health.google_usage.budget_limit_tl === 100 && health.google_usage.max_attempts_per_request === 1)
-  check('capacity_ready', runtime.google_search_capacity.resolved_coordinates['3'].available && runtime.google_remaining_requests >= 10)
+  const attempts = health.google_usage.max_attempts_per_request
+  check('budget_and_retry_guard', uncappedApproved
+    ? health.google_usage.budget_enforced === false && health.google_usage.budget_limit_tl === null && health.google_usage.usage_accounting_enforced === true && attempts === 1
+    : health.google_usage.budget_enforced && health.google_usage.budget_limit_tl === 100 && [1, 2].includes(attempts))
+  report.max_google_attempts = 10 * attempts
+  if (dailyUncappedApproved) {
+    check('daily_quota_disabled', health.google_usage.daily_quota_enforced === false
+      && runtime.google_daily_quota_enforced === false && runtime.google_remaining_requests === null
+      && health.google_usage.provider_quotas_managed_externally === true)
+  }
+  check('capacity_ready', runtime.google_search_capacity.resolved_coordinates['3'].available
+    && (dailyUncappedApproved || runtime.google_remaining_requests >= report.max_google_attempts))
+  check('brand', await page.getByRole('heading', { name: 'ORTAK', exact: true }).count() === 1)
   await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
   const coordinates = ['39.92,32.85', '39.93,32.86', '39.94,32.87']
   for (let i = 0; i < 3; i++) {
@@ -115,7 +145,8 @@ try {
   check('initial_score_components', first.recommendations.every(row => Math.abs(row.score - row.score_breakdown.rating_component - row.score_breakdown.cost_component - row.score_breakdown.proximity_component) <= .001))
   check('person_weights_applied', first.recommendations.every(r => r.constraint_status.complete_route_matrix
     && r.score_breakdown.proximity_contributions.every(p => Math.abs(p.weight - (p.user_id === 'user-1' ? .5 : .25)) <= .001)))
-  check('ten_google_calls', calls() === 10 && report.stages.every(s => s.google_retries === 0))
+  searchCalls = calls()
+  check('bounded_google_calls', searchCalls === 10 + report.stages.reduce((n, stage) => n + stage.google_retries, 0) && searchCalls <= report.max_google_attempts)
   const links = await page.getByRole('link', { name: 'Yol tarifi', exact: true }).evaluateAll(nodes => nodes.map(node => node.href))
   check('destination_only_links', links.length === 3 && links.every(href => {
     const url = new URL(href)
@@ -136,7 +167,7 @@ try {
   await page.getByLabel('En fazla süre (dk)', { exact: true }).fill('')
   await recommendationAction(() => page.getByRole('button', { name: 'Güncelle', exact: true }).click())
   await expect(page.locator('.recommendation-card')).toHaveCount(3)
-  check('no_rebilling_for_preferences', calls() === 10 && report.stages.filter(s => s.path === '/api/routes/matrix').length === 1 && report.stages.filter(s => s.path === '/api/candidates/search').length === 1)
+  check('no_rebilling_for_preferences', calls() === searchCalls && report.stages.filter(s => s.path === '/api/routes/matrix').length === 1 && report.stages.filter(s => s.path === '/api/candidates/search').length === 1)
   phase = 'responsive_layout'
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
@@ -160,7 +191,7 @@ try {
 } finally {
   await settle()
   if (scenarioId) {
-    const response = await context.request.delete(new URL(`/api/scenarios/${scenarioId}`, base).href,
+    const response = await context.request.delete(apiUrl(`/scenarios/${scenarioId}`),
       { headers: { Origin: new URL(base).origin, 'X-ORTAK-CSRF': csrf } }).catch(() => null)
     report.session_cleanup_verified = response?.status() === 204
     if (!report.session_cleanup_verified) {

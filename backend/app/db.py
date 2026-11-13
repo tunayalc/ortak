@@ -112,6 +112,14 @@ def init_db() -> None:
                 elapsed_ms REAL
             );
             CREATE INDEX IF NOT EXISTS google_usage_day_idx ON google_api_usage(usage_day);
+            CREATE TABLE IF NOT EXISTS mobile_feedback (
+                id TEXT PRIMARY KEY,
+                created_at INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                rating REAL NOT NULL,
+                cost REAL NOT NULL,
+                proximity REAL NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS request_limits (
                 subject TEXT NOT NULL,
                 name TEXT NOT NULL,

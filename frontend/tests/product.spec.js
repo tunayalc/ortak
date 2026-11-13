@@ -58,7 +58,7 @@ test('hatalı bağlantı öneri akışını durdurur', async ({ page }) => {
   expect(scenarios).toBe(0)
 })
 
-test('öneriler, profiller, filtre ve boş sonuç', async ({ page }) => {
+test('öneriler, profiller, filtre ve boş sonuç', async ({ page }, testInfo) => {
   let routes = 0
   page.on('request', (request) => { if (request.url().endsWith('/api/routes/matrix')) routes++ })
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
@@ -67,6 +67,10 @@ test('öneriler, profiller, filtre ve boş sonuç', async ({ page }) => {
   await expect(page.locator('.profile-control .active')).toContainText('Puan öncelikli')
   await expect(page.getByRole('button', { name: 'Güncelle', exact: true })).toBeEnabled()
   expect(routes).toBe(1)
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((value) => { document.documentElement.dataset.theme = value }, theme)
+    await page.locator('.result-layout').screenshot({ path: testInfo.outputPath(`results-${theme}.png`) })
+  }
   await page.getByLabel('En az puan', { exact: true }).fill('5')
   await page.getByRole('button', { name: 'Güncelle', exact: true }).click()
   await expect(page.locator('.recommendation-card')).toHaveCount(0)
@@ -178,6 +182,7 @@ test('yerel Google anahtarı varken kapalı çağrılar model tarafından açıl
   await page.route('**/api/health', (route) => route.fulfill({ json: { google_configured: true, ai_provider: 'ollama', ai_model: 'llama3:8b', ai_ready: true, ai_status: 'ready' } }))
   await page.reload()
   await previewPreference(page)
+  await expect(page.getByText('Google Maps yapılandırıldı', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Öneri üret', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Uygula ve mekânları bul', exact: true })).toBeDisabled()
   await expect(page.getByText('Google çağrıları kapalı.', { exact: true })).toBeVisible()

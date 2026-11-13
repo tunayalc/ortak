@@ -25,6 +25,8 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
+import MeetingPlanner from './MeetingPlanner'
+import { planSearchInput } from './planner'
 
 const categories = [
   { value: 'cafe', label: 'Kafe' },
@@ -203,13 +205,6 @@ function cleanNumberMap(values) {
       .filter(([, value]) => value !== '' && value !== null && value !== undefined)
       .map(([key, value]) => [key, Number(value)]),
   )
-}
-
-function StatusBadge({ health }) {
-  const label = health?.google_configured
-    ? health?.google_usage?.calls_enabled === false ? 'Google Maps: çağrılar kapalı' : 'Google Maps yapılandırıldı'
-    : health?.osrm_base_url ? 'OSRM + sentetik' : 'Sentetik'
-  return <span className="status">{label}</span>
 }
 
 function WeightBars({ weights }) {
@@ -895,6 +890,9 @@ function ReportDraft() {
 }
 
 export default function App() {
+  const [engine, setEngine] = useState('places')
+  const [transferringPlan, setTransferringPlan] = useState(false)
+  const [planNotice, setPlanNotice] = useState('')
   const [theme, setTheme] = useState(() => {
     try {
       const saved = window.localStorage.getItem('ortak-theme')
@@ -1029,6 +1027,7 @@ export default function App() {
   }, [scenarioForm.group_size])
 
   function updateForm(key, value) {
+    setPlanNotice('')
     setScenarioForm((current) => ({ ...current, [key]: value }))
   }
 
@@ -1246,6 +1245,7 @@ export default function App() {
 
   async function runPipeline(overrides = {}) {
     if ((!canStartSearch && !canResumeRoutes) || busy || pipelineInFlight.current) return
+    setPlanNotice('')
     pipelineInFlight.current = true
     const ensureUnchangedInputs = () => {
       if (currentSearchContext.current !== searchContext) {
@@ -1388,18 +1388,39 @@ export default function App() {
     }
   }
 
+  async function transferPlan(plan) {
+    if (busy || pipelineInFlight.current || transferringPlan) throw new Error('Mevcut işlemin tamamlanmasını bekleyin.')
+    const next = planSearchInput(plan.handoff, runtimeConfig?.max_participants || 8)
+    setTransferringPlan(true)
+    try {
+      if (scenario?.session_only) {
+        try { await api.deleteScenario(scenario.id) }
+        catch (cause) { if (cause.status !== 404) throw cause }
+      }
+      setScenario(null); setScenarioContext(null); setResponse(null); setSelectedId(null)
+      setRouteRecovery(null); setExperiment(null); setCounts({ candidates: 0, routes: 0 })
+      setScenarioForm({ ...initialScenario, city: next.city, category: next.category, group_size: next.group_size })
+      setInputMode('link'); setParticipantLocations(next.participants); setParsedLocations([]); parsedLocationValues.current = ''
+      setCriterionWeights(next.weights); setCriteriaProfile(next.weights.cost === 60 ? 'cost' : 'balanced')
+      setIntentText(''); setIntentSuggestion(null); setAiApplied(false); setMinRating(''); setMaxDuration(''); setManualCosts({})
+      setAdvancedPriority(false); setUseAdjustedDurations(false); setParsedFocusLocation(null); setFocusLocationInput('')
+      setFocusMode('delta_weighted_participants'); setFocusUserId(ALL_DELTA_FOCUS_ID); setError('')
+      setPlanNotice(`${plan.title} aktarıldı. Kişi konumlarını girdikten sonra mekân arayabilirsiniz.`)
+      setEngine('places')
+    } finally { setTransferringPlan(false) }
+  }
+
   return (
     <main className="product-shell">
       <header className="app-header">
         <div className="brand-mark">
-          <Route size={26} />
+          <img className="brand-symbol" src="/favicon.svg" alt="" />
           <div>
             <h1>ORTAK</h1>
-            <span>Optimum rota tabanlı adil kesişim</span>
+            <span>Buluşacağımız yer</span>
           </div>
         </div>
         <div className="header-actions">
-          <StatusBadge health={health} />
           <button
             className="theme-toggle"
             onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
@@ -1410,8 +1431,17 @@ export default function App() {
           </button>
         </div>
       </header>
-
+      <nav className="engine-nav" aria-label="ORTAK bölümleri">
+        <button aria-current={engine === 'places' ? 'page' : undefined} onClick={() => setEngine('places')}><MapPin size={18} />Mekân bul</button>
+        <button aria-current={engine === 'plans' ? 'page' : undefined} onClick={() => setEngine('plans')}><Sparkles size={18} />Buluşma planı</button>
+      </nav>
+      <MeetingPlanner active={engine === 'plans'} maxParticipants={runtimeConfig?.max_participants || 8} available={health?.ai_ready === true}
+        onTransfer={transferPlan} transferring={transferringPlan || Boolean(busy)} />
+      <div hidden={engine !== 'places'} className="places-engine">
+      <div className="planner-invitation"><span>Henüz bir mekân fikriniz yok mu?</span><button className="secondary" onClick={() => setEngine('plans')}><Sparkles size={17} />Buluşma planı oluştur</button></div>
+      {planNotice && <p className="privacy-note" role="status">{planNotice}</p>}
       <section className="control-band">
+        <h2 className="section-heading">Mekân bul</h2>
         <div className="control-grid simple-control-grid">
           <label>
             Şehir
@@ -1574,6 +1604,7 @@ export default function App() {
           {activeTab === 'report' && <ReportDraft />}
         </div>
       </section>
+      </div>
       <footer className="app-footer">
         <a href="/privacy.html" target="_blank" rel="noreferrer">Gizlilik</a>
         <a href="/terms.html" target="_blank" rel="noreferrer">Kullanım koşulları</a>

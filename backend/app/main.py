@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import sqlite3
 from contextlib import asynccontextmanager, suppress
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse
 
@@ -40,6 +41,9 @@ from .services.scoring import recommend
 from .services import session_store
 from .services.google_prices import refresh_loop
 from .services.public_safety import PublicSafetyMiddleware
+from .services.mobile_session import ClientSessionMiddleware, issue_mobile_token
+from .services.mobile_feedback import cleanup_feedback, router as mobile_feedback_router
+from .services.meeting_planner import PlanBrief, PlanInterpretRequest, PlanInterpretation, PlanRecommendations, interpret_plan, recommend_plans
 
 
 router = APIRouter()
@@ -62,6 +66,10 @@ async def lifespan(app):
     async def cleanup():
         while True:
             session_store.cleanup_expired()
+            try:
+                await asyncio.to_thread(cleanup_feedback)
+            except sqlite3.Error:
+                logging.getLogger(__name__).warning("Mobile feedback cleanup unavailable; will retry.")
             await asyncio.sleep(30)
     task = asyncio.create_task(cleanup())
     price_task = asyncio.create_task(refresh_loop())
@@ -111,6 +119,15 @@ def runtime_config(request: Request):
     }
 
 
+@router.post("/mobile/session")
+def mobile_session(request: Request):
+    return {
+        "access_token": issue_mobile_token(get_settings(), request.session["id"]),
+        "token_type": "Bearer",
+        "expires_in": session_store.SESSION_TTL_SECONDS,
+    }
+
+
 @router.get("/readyz")
 def readyz():
     with get_conn() as conn:
@@ -136,6 +153,22 @@ async def post_preferences_interpret(payload: PreferenceInterpretRequest) -> Pre
             return await interpret_preferences(payload)
     except PreferenceServiceError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+
+@router.post("/plans/interpret", response_model=PlanInterpretation)
+async def post_plan_interpret(payload: PlanInterpretRequest) -> PlanInterpretation:
+    if _model_lock.locked():
+        raise HTTPException(429, "Model şu anda meşgul. Buluşma bilgilerini kendiniz doldurabilir veya biraz sonra deneyebilirsiniz.")
+    try:
+        async with _model_lock:
+            return await interpret_plan(payload)
+    except PreferenceServiceError as exc:
+        raise HTTPException(exc.status_code, str(exc)) from exc
+
+
+@router.post("/plans/recommend", response_model=PlanRecommendations)
+def post_plan_recommend(payload: PlanBrief) -> PlanRecommendations:
+    return recommend_plans(payload)
 
 
 @router.post("/scenarios", response_model=Scenario)
@@ -247,17 +280,15 @@ def create_app() -> FastAPI:
                           docs_url=None if settings.production else "/docs",
                           redoc_url=None if settings.production else "/redoc")
     application.include_router(router)
+    application.include_router(mobile_feedback_router)
     application.middleware("http")(google_call_metadata)
     application.add_middleware(CORSMiddleware, allow_origins=settings.origins,
                                allow_credentials=True, allow_methods=["GET", "POST", "DELETE"],
-                               allow_headers=["Content-Type", "X-ORTAK-CSRF"])
+                               allow_headers=["Content-Type", "X-ORTAK-CSRF", "Authorization"])
     if settings.production:
         application.add_middleware(TrustedHostMiddleware, allowed_hosts=[urlparse(settings.public_base_url).hostname])
     application.add_middleware(PublicSafetyMiddleware, settings=settings)
-    application.add_middleware(SessionMiddleware,
-                               secret_key=settings.session_secret or "local-development-only-not-for-production",
-                               session_cookie="ortak_session", max_age=session_store.SESSION_TTL_SECONDS,
-                               same_site="lax", https_only=settings.production)
+    application.add_middleware(ClientSessionMiddleware, settings=settings)
 
     @application.exception_handler(GoogleUsageBlocked)
     async def quota_error(request, exc):

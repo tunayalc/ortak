@@ -24,8 +24,12 @@ def reserve_rate_limits(settings: Settings, session_id: str, ip: str, path: str)
     limits = [("requests", 60, 60)]
     if path in {"/locations/parse", "/scenarios", "/candidates/search", "/routes/matrix"}:
         limits.append(("paid", 60, 6))
-    if path == "/preferences/interpret":
+    if path in {"/preferences/interpret", "/plans/interpret"}:
         limits.extend([("llm", 60, 3), ("llm_day", 86400, 20)])
+    if path == "/mobile/session":
+        limits.append(("mobile_sessions", 60, 6))
+    if path == "/mobile/feedback":
+        limits.append(("mobile_feedback", 3600, 10))
     with get_conn() as conn:
         conn.execute("BEGIN IMMEDIATE")
         conn.execute("DELETE FROM request_limits WHERE expires_at <= ?", (now,))
@@ -62,7 +66,7 @@ class PublicSafetyMiddleware:
 
         if "id" not in request.session:
             request.session.update(id=secrets.token_urlsafe(24), csrf=secrets.token_urlsafe(24))
-        if request.method in MUTATING_METHODS:
+        if request.method in MUTATING_METHODS and not scope.get("ortak.mobile"):
             if request.headers.get("origin") != self.settings.public_base_url:
                 await reject(403, "İstek kaynağı doğrulanamadı.")
                 return

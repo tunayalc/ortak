@@ -1,8 +1,10 @@
 const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api')
+const USE_VERCEL_GATEWAY = import.meta.env.VITE_VERCEL_GATEWAY === '1'
 let csrfToken = ''
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const url = USE_VERCEL_GATEWAY ? `/api/orak-gateway?path=${encodeURIComponent(path)}` : `${API_BASE}${path}`
+  const response = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
@@ -17,7 +19,9 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const message = typeof payload === 'string' ? payload : payload.detail || 'Beklenmeyen API hatası'
-    throw new Error(Array.isArray(message) ? message.map((item) => `${item.loc?.slice(1).join(' / ') || 'Girdi'}: ${item.msg}`).join(' ') : message)
+    const error = new Error(Array.isArray(message) ? message.map((item) => `${item.loc?.slice(1).join(' / ') || 'Girdi'}: ${item.msg}`).join(' ') : message)
+    error.status = response.status
+    throw error
   }
 
   return payload
@@ -31,6 +35,8 @@ export const api = {
   },
   deleteScenario: (id) => request(`/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   health: () => request('/health'),
+  interpretPlan: (body) => request('/plans/interpret', { method: 'POST', body: JSON.stringify(body) }),
+  recommendPlans: (body) => request('/plans/recommend', { method: 'POST', body: JSON.stringify(body) }),
   parseLocations: (body) =>
     request('/locations/parse', {
       method: 'POST',

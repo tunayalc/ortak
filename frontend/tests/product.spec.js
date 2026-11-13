@@ -61,7 +61,10 @@ test('hatalı bağlantı öneri akışını durdurur', async ({ page }) => {
 test('öneriler, profiller, filtre ve boş sonuç', async ({ page }, testInfo) => {
   let routes = 0
   page.on('request', (request) => { if (request.url().endsWith('/api/routes/matrix')) routes++ })
+  const recommendation = page.waitForResponse(response =>
+    response.url().endsWith('/api/recommendations') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  expect((await recommendation).status()).toBe(200)
   await expect(page.locator('.recommendation-card')).toHaveCount(3)
   await page.getByRole('button', { name: /Puan öncelikli/ }).click()
   await expect(page.locator('.profile-control .active')).toContainText('Puan öncelikli')

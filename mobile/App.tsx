@@ -183,8 +183,8 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Label>Konumunuz yalnızca ilgili düğmeye bastığınızda alınır. Arka planda konum takibi yapılmaz. Link veya koordinat girişi için konum izni gerekmez.</Label>
               <Label>Google Maps, konum çözümleme, mekân ve yol sürelerini sağlar. Llama, uygulama sunucusunda tercih metnini yorumlar; kişi konumu alanları modele gönderilmez. Reklam veya analitik SDK'sı yoktur.</Label>
               <Label>Hız ve maliyet kayıtları içerik taşımaz. Yapay zekâ bildirimlerinde yalnızca sorun türü ve kriter ağırlıkları 30 gün saklanır; tercih cümlesi veya kişi bilgisi eklenmez.</Label>
-              <Button label="Gizlilik politikası" icon={ShieldCheck} tone="secondary" onPress={() => void openUrl('https://ortak-2209.vercel.app/mobile-privacy.html')} />
-              <Button label="Kullanım koşulları" tone="secondary" onPress={() => void openUrl('https://ortak-2209.vercel.app/mobile-terms.html')} />
+              <Button label="Gizlilik politikası" icon={ShieldCheck} tone="secondary" onPress={() => void openUrl('https://ortak.web.tr/mobile-privacy.html')} />
+              <Button label="Kullanım koşulları" tone="secondary" onPress={() => void openUrl('https://ortak.web.tr/mobile-terms.html')} />
               <Button label="Google gizlilik politikası" tone="secondary" onPress={() => void openUrl('https://policies.google.com/privacy')} />
               <Button label="Destek" tone="secondary" onPress={() => void openUrl('https://github.com/tunayalc/ortak/issues')} />
             </Section>

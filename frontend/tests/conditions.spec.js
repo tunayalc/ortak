@@ -15,6 +15,13 @@ async function openPlan(page) {
   await page.getByRole('checkbox', { name: /Metnimin sunucudaki Llama/ }).check()
 }
 
+async function overrideRuntime(page, changes) {
+  const response = await page.request.get('/api/runtime-config')
+  expect(response.ok()).toBe(true)
+  const json = { ...await response.json(), ...changes }
+  await page.route('**/api/runtime-config', route => route.fulfill({ json }))
+}
+
 test('preview cancel keeps current values; approved transfer preserves conditions without Google', async ({ page }) => {
   const paid = []
   page.on('request', r => { if (/\/(scenarios|candidates\/search|routes\/matrix)$/.test(r.url())) paid.push(r.url()) })
@@ -95,7 +102,7 @@ test('venue Llama delay allows manual controls; stale response is discarded', as
 
 test('absolute session expiry removes private inputs and results', async ({ page }) => {
   await page.clock.install()
-  await page.route('**/api/runtime-config', async route => { const response = await route.fetch(); await route.fulfill({ json: { ...await response.json(), session_ttl_seconds: 2 } }) })
+  await overrideRuntime(page, { session_ttl_seconds: 2 })
   await page.reload()
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
   await expect(page.locator('.recommendation-card')).toHaveCount(3)
@@ -121,7 +128,7 @@ test('unknown price keeps the budget and entered costs reuse routes', async ({ p
 })
 
 test('older backend cannot silently discard conditions or context', async ({ page }) => {
-  await page.route('**/api/runtime-config', async route => { const response = await route.fetch(); await route.fulfill({ json: { ...await response.json(), capabilities: {} } }) })
+  await overrideRuntime(page, { capabilities: {} })
   await page.reload()
   let mutations = 0
   page.on('request', r => { if (r.method() === 'POST') mutations++ })

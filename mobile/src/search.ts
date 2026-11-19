@@ -1,6 +1,7 @@
 import type { MobileApi } from './api';
 import { assertCompleteMatrix, inputKey, normalizeWeights, validateParticipants } from './domain';
 import type { Candidate, ParsedLocation, Preferences, RuntimeConfig, Scenario, SearchInput } from './types';
+import { validateConditions } from './conditions';
 
 export type Progress = 'parse' | 'scenario' | 'candidates' | 'routes' | 'recommend';
 
@@ -28,7 +29,9 @@ export class SearchSession {
     if (!input.city.trim()) throw new Error('Şehir adını girin.');
     validateParticipants(input.participants, config.max_participants);
     normalizeWeights(preferences.weights);
+    validateConditions(preferences.conditions);
     if (!Number.isInteger(preferences.k) || preferences.k < 1 || preferences.k > config.max_k) throw new Error('Öneri sayısını kontrol edin.');
+    if (preferences.conditions && (preferences.conditions.budget_limit || preferences.conditions.excluded_categories.length || preferences.conditions.required_features.length) && !config.capabilities?.conditions_v1) throw new Error('Sunucu kesin koşulları desteklemiyor; ücretli arama başlatılmadı.');
     if (this.scenario && key !== this.key) throw new Error('Konumlar değişti. Önce mevcut buluşmayı silip yeni arama başlatın.');
     if (!this.scenario) {
       const capacity = config.google_search_capacity?.resolved_coordinates?.[String(input.participants.length)];

@@ -159,7 +159,11 @@ def run_experiment(payload: ExperimentRequest) -> ExperimentResponse:
             scenario_id=payload.scenario_id,
             scoring_mode=payload.scoring_mode,
             lambda_value=payload.lambda_value,
-            k=payload.k,
+            k=20,
+            conditions=payload.conditions,
+            min_rating=payload.min_rating,
+            max_duration_minutes=payload.max_duration_minutes,
+            category=payload.category,
             priority_profile=payload.priority_profile,
             fairness_weight=payload.fairness_weight,
             efficiency_weight=payload.efficiency_weight,
@@ -176,6 +180,10 @@ def run_experiment(payload: ExperimentRequest) -> ExperimentResponse:
             use_adjusted_durations=payload.use_adjusted_durations,
         )
     )
+    eligible_ids = {item.candidate.id for item in model_response.recommendations}
+    valid_candidates = [candidate for candidate in valid_candidates if candidate.id in eligible_ids]
+    if len(valid_candidates) < 3:
+        raise ValueError("Karşılaştırma için aynı kesin koşulları sağlayan en az üç aday gerekiyor. Koşullar değiştirilmedi.")
     model_top = model_response.recommendations[0]
     model_metrics = {
         "t_avg": model_top.t_avg_minutes,

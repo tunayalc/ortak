@@ -113,8 +113,9 @@ export function useMeeting() {
   });
 
   const applySuggestion = () => {
+    if (suggestion?.questions?.length) return;
     if (!suggestion || lock.current) return;
-    setPreferences({ ...preferences, weights: suggestion.criterion_weights, minRating: suggestion.min_rating, maxMinutes: suggestion.max_duration_minutes });
+    setPreferences({ ...preferences, conditions: suggestion.conditions, weights: suggestion.criterion_weights, minRating: suggestion.min_rating, maxMinutes: suggestion.max_duration_minutes });
     setInput({ ...input, participants: input.participants.map((p, i) => ({ ...p, delta_weight: suggestion.participant_proximity_weights[`user-${i + 1}`]! })) });
     setSuggestion(null); setText(''); setNotice('İncelediğiniz tercihler uygulandı.');
   };

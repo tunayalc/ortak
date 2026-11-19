@@ -16,6 +16,8 @@ type Tab = 'Buluşma' | 'Tercihler' | 'Öneriler' | 'Gizlilik';
 const tabs = [{ label: 'Buluşma', icon: Users }, { label: 'Tercihler', icon: SlidersHorizontal }, { label: 'Öneriler', icon: MapPin }, { label: 'Gizlilik', icon: ShieldCheck }] as const;
 const weightLabels: Record<keyof CriterionWeights, string> = { rating: 'Mekân puanı', cost: 'Fiyat uygunluğu', proximity: 'Kişilere yakınlık' };
 
+import { conditionLines } from './src/conditions';
+
 export default function App() {
   const scheme = useColorScheme();
   const [appearance, setAppearance] = useState('Sistem');
@@ -136,6 +138,8 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Toggle label="En düşük mekân puanı" value={m.preferences.minRating !== null} disabled={disabled} onChange={on => m.setPreferences({ ...m.preferences, minRating: on ? 4 : null })} />
               {m.preferences.minRating !== null && <Stepper label="Minimum puan" min={0} max={5} step={0.5} value={m.preferences.minRating} disabled={disabled} onChange={minRating => m.setPreferences({ ...m.preferences, minRating })} />}
               <Toggle label="Kişi başına süre sınırı" value={m.preferences.maxMinutes !== null} disabled={disabled} onChange={on => m.setPreferences({ ...m.preferences, maxMinutes: on ? 30 : null })} />
+              {conditionLines(m.preferences.conditions).map(line => <Notice key={line}>{line}</Notice>)}
+              {conditionLines(m.preferences.conditions).length > 0 && <Button label="Kesin koşulları kaldır" tone="secondary" disabled={disabled} onPress={() => m.setPreferences({ ...m.preferences, conditions: undefined })} />}
               {m.preferences.maxMinutes !== null && <Stepper label="En fazla dakika" min={5} max={240} step={5} value={m.preferences.maxMinutes} disabled={disabled} onChange={maxMinutes => m.setPreferences({ ...m.preferences, maxMinutes })} />}
               <Label secondary>Fiyat seviyesi gerçek bir TL tutarı değildir. Yol süreleri araçla ulaşım içindir; kişi ağırlıkları yalnızca yakınlık tercihini değiştirir.</Label>
             </Section>
@@ -149,9 +153,11 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
                 <Heading>Öneriyi incele</Heading><Label secondary>Bu değerler henüz uygulanmadı.</Label>
                 <WeightSummary weights={m.suggestion.criterion_weights} />
                 {m.input.participants.map((p, i) => <Label key={i}>{p.label}: {m.suggestion!.participant_proximity_weights[`user-${i + 1}`]}×</Label>)}
-                <Label>Minimum puan: {m.suggestion.min_rating ?? 'Sınır yok'} · Süre: {m.suggestion.max_duration_minutes === null ? 'Sınır yok' : `${m.suggestion.max_duration_minutes} dk`}</Label>
+                <Label>Minimum puan: {m.suggestion.min_rating ?? 'Sınır yok'}, Süre: {m.suggestion.max_duration_minutes === null ? 'Sınır yok' : `${m.suggestion.max_duration_minutes} dk`}</Label>
                 {m.suggestion.warnings.map((warning, i) => <Notice key={i}>{warning}</Notice>)}
-                <Button label="Bu tercihleri uygula" icon={CheckCheck} onPress={m.applySuggestion} disabled={disabled} />
+                {conditionLines(m.suggestion.conditions).map(line => <Notice key={line}>{line}</Notice>)}
+                {m.suggestion.questions?.map(question => <Notice key={question}>{question}</Notice>)}
+                <Button label="Bu tercihleri uygula" icon={CheckCheck} onPress={m.applySuggestion} disabled={disabled || Boolean(m.suggestion.questions?.length)} />
                 <View style={styles.between}><Button label="Vazgeç" icon={X} tone="secondary" onPress={() => m.setSuggestion(null)} disabled={disabled} /><IconButton label="Yapay zekâ önerisini bildir" icon={Flag} onPress={() => setReportOpen(true)} disabled={disabled} /></View>
               </View>}
               <Label secondary>Built with Meta Llama 3</Label>
@@ -183,7 +189,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Button label="Destek" tone="secondary" onPress={() => void openUrl('https://github.com/tunayalc/ortak/issues')} />
             </Section>
             <Section><Heading>Görünüm</Heading><Segmented items={['Sistem', 'Açık', 'Koyu']} value={appearance} onChange={setAppearance} /></Section>
-            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.1.0 · Built with Meta Llama 3</Label></Section>
+            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.1.0 - Built with Meta Llama 3</Label></Section>
           </>}
           </View>
         </ScrollView>
@@ -226,7 +232,7 @@ function WeightSummary({ weights }: { weights: CriterionWeights }) {
   try { normalized = normalizeWeights(weights); } catch { return <Notice error>En az bir kriterin ağırlığını artırın.</Notice>; }
   return <View style={{ gap: 8 }}><View style={{ flexDirection: 'row', height: 6, gap: 2 }}>
     {[normalized.rating, normalized.cost, normalized.proximity].map((weight, i) => <View key={i} style={{ flex: weight, backgroundColor: [t.primary, t.accent, t.warning][i], borderRadius: 2 }} />)}
-  </View><Label secondary>Puan %{Math.round(normalized.rating * 100)} · Fiyat %{Math.round(normalized.cost * 100)} · Yakınlık %{Math.round(normalized.proximity * 100)}</Label></View>;
+  </View><Label secondary>Puan %{Math.round(normalized.rating * 100)}, Fiyat %{Math.round(normalized.cost * 100)}, Yakınlık %{Math.round(normalized.proximity * 100)}</Label></View>;
 }
 
 function ResultCard({ result: r, isDark, openUrl, onError }: { result: Recommendation; isDark: boolean; openUrl: (url: string) => Promise<void>; onError: (message: string) => void }) {
@@ -240,10 +246,10 @@ function ResultCard({ result: r, isDark, openUrl, onError }: { result: Recommend
   return <View style={{ gap: 14, padding: 16, backgroundColor: t.surface, borderRadius: 2, borderWidth: 1, borderColor: r.rank === 1 ? t.primary : t.divider }}>
     <View style={styles.between}><Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>{r.rank === 1 ? 'İlk tercih' : `${r.rank}. seçenek`}</Text><Label>{(r.score * 100).toFixed(1)} / 100</Label></View>
     <Heading>{r.candidate.name}</Heading><Label secondary>{r.candidate.address}</Label>
-    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><Star color={t.warning} size={17} /><Label>{r.candidate.rating.toFixed(1)} · {r.candidate.review_count} değerlendirme</Label></View>
+    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><Star color={t.warning} size={17} /><Label>{r.candidate.rating > 0 ? r.candidate.rating.toFixed(1) : 'Puan bilinmiyor'}, {r.candidate.review_count} değerlendirme</Label></View>
     <Label>{priceLabel(r.candidate.price_level)}</Label>
     <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}><View style={{ gap: 3 }}><Label secondary>Ortalama yol</Label><Text style={{ color: t.text, fontWeight: '700', fontSize: 22 }}>{r.t_avg_minutes.toFixed(0)} dk</Text></View><View style={{ gap: 3 }}><Label secondary>En uzun yol</Label><Text style={{ color: t.text, fontWeight: '700', fontSize: 22 }}>{r.t_max_minutes.toFixed(0)} dk</Text></View></View>
-    <View style={{ gap: 8 }}>{r.per_user.map(p => <View key={p.user_id} style={styles.between}><View style={{ flex: 1 }}><Label>{p.label}</Label></View><Label>{p.raw_duration_minutes.toFixed(0)} dk · {p.distance_km.toFixed(1)} km</Label></View>)}</View>
+    <View style={{ gap: 8 }}>{r.per_user.map(p => <View key={p.user_id} style={styles.between}><View style={{ flex: 1 }}><Label>{p.label}</Label></View><Label>{p.raw_duration_minutes.toFixed(0)} dk, {p.distance_km.toFixed(1)} km</Label></View>)}</View>
     <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 5, alignSelf: 'flex-start' }}>
       <Image accessibilityLabel="Google Maps" source={isDark ? require('./assets/GoogleMaps_Logo_White_4x.png') : require('./assets/GoogleMaps_Logo_DarkGray_4x.png')} style={{ height: 18, width: 101 }} resizeMode="contain" />
     </View>
@@ -254,7 +260,7 @@ function ResultCard({ result: r, isDark, openUrl, onError }: { result: Recommend
         <Label>Puan katkısı: {(r.score_breakdown.rating_component * 100).toFixed(1)}</Label>
         <Label>Fiyat katkısı: {(r.score_breakdown.cost_component * 100).toFixed(1)}</Label>
         <Label>Yakınlık katkısı: {(r.score_breakdown.proximity_component * 100).toFixed(1)}</Label>
-        {r.score_breakdown.proximity_contributions.map(p => <Label key={p.user_id}>{p.label}: yakınlıkta %{Math.round(p.weight * 100)} ağırlık · {p.distance_km.toFixed(1)} km kuş uçuşu</Label>)}
+        {r.score_breakdown.proximity_contributions.map(p => <Label key={p.user_id}>{p.label}: yakınlıkta %{Math.round(p.weight * 100)} ağırlık, {p.distance_km.toFixed(1)} km kuş uçuşu</Label>)}
       </>}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ flex: 1 }}><Button label="Yol tarifi" icon={Navigation} onPress={openDirections} /></View><IconButton label={`${r.candidate.name} hedefini paylaş`} icon={Share2} onPress={() => void share()} /></View>
     </View>

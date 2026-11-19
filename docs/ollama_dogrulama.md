@@ -1,5 +1,29 @@
 # Ollama Entegrasyonu: Doğrulama Kaydı
 
+## 16 Kasım 2026: Yerel Arayüz ve Bağlam Revizyonu
+
+Bu bölüm yerel geliştirme sürümünü anlatır; üretime yayın yapılmadı. İki motorun önizleme/onay akışı ve matematiksel sıralaması korunur. Buluşma planları doğrulanmış etkinlik veya rezervasyon değildir. DeFacto kaynak kodları bu ortamda bulunmadı; kullanıcının sağladığı mühendislik ilkeleri uygulandı, referans proje değişikliği yapılmadı.
+
+- Ortak aşama gezinmesi, durum bildirimi ve koşul düzenleyicisi eklendi. Geç gelen yorumlar yeni form değerlerini ezmez; manuel planlama model yanıtını beklemeden sürebilir. Aktarım isteğe bağlıdır ve Google araması başlatmaz.
+- `conditions` sözleşmesi kişi başı/toplam TRY bütçesini, hariç tutulan kategorileri ve desteklenen zorunlu özellikleri ayrı taşır. Kısa takiplerde belirtilmeyen alanlar korunur; yeni konu önceki plan koşullarını sıfırlar. Belirsiz kişi/bütçe ve çelişkili ortam önizlemede açıklama ister.
+- Google fiyat seviyesi TL değildir. Bütçe filtresi yalnızca kullanıcı tarafından girilmiş kişi başı TL tutarlarıyla karşılaştırma yapar; bu tutarlar doğrulanmış menü fiyatı sayılmaz. Bilinmeyen fiyat bütçeye uyum kanıtı değildir. Doğrulanamayan zorunlu sessizlik, erişilebilirlik ve alkolsüzlük koşulları sessizce kaldırılmaz.
+- Puanı bulunmayan aday nötr puan bileşeni alır. TL maliyetleri ile fiyat seviyeleri tek sayısal ölçekte karşılaştırılmaz; karışık ölçekte fiyat bileşeni nötrdür. Sentetik fiyatlar Google verisi diye etiketlenmez. Yakınlık hâlâ kuş uçuşu mesafeye dayanır; rota süresi değildir.
+- Yeni istemciler `/runtime-config` içindeki `conditions_v1` / `plan_context_v1` yeteneklerini denetler. Eski sunucuda koşulları yok sayarak yorumlama veya ücretli arama başlatılmaz. Yayın yapılacaksa backend sözleşmesi önce hazır olmalıdır.
+
+Doğrulama: 337 backend testi, 60 masaüstü/mobil Playwright testi, 27 mobil mantık testi ve 9 geçit testi başarılı; web üretim derlemesi ve mobil TypeScript kontrolü başarılı. Web kontrolleri 390, 768, 844 ve 1440 piksel genişlikleri, yatay telefon, açık/koyu tema, azaltılmış hareket, klavye odağı, oturum bitmesi, geç yanıt, boş sonuç ve rota tekrar kullanımını kapsar. Bunlar fiziksel iOS/Android cihaz kabulünün yerine geçmez.
+
+Gerçek yerel `llama3:8b` ile eski tercih seti son çalıştırmada **12/12**, yeni diyalog seti **16/16** geçti. Yeni setin 15 örneği gerçek model çağrısı, biri yalnızca ekranda sunulan plan sırasını çözen deterministik kontroldür. Üç turlu zincirde önceki gerçek model çıktısı sonraki turun bağlamına aktarıldı. Son çalıştırmada model çağrıları 1,70–6,21 saniyeydi; performans garantisi değildir. Başlangıçtaki yeni set 8/13, eski setin ilk tekrarı 11/12 idi: kişi başı ifadesinde grup sayısının değişmesi, koşulun yanlış alana taşınması ve yazım hatalı kriter dayanağının reddi düzeltildi. Bu geliştirme setleri bağımsız genel Türkçe başarı ölçümü değildir.
+
+Tekrar çalıştırma (mevcut yerel model gerekir; model indirme veya Google çağrısı yapmaz):
+
+```bash
+backend/.venv-release/bin/python backend/scripts/evaluate_dialogue.py --live
+```
+
+Gerçek Llama önizlemesi uygulama içi tarayıcıda da kontrol edildi; mekân/rota arayüz testlerinde sentetik veri kullanıldı. Ücretli Google pilotu yapılmadı. Üretim backend'inin sağlık yanıtı 200 ve model `llama3:8b` hazırdı; üretim yetenek yanıtında yeni koşul sözleşmesi bulunmuyordu. Bu kontrol üretimde yeni sürümün çalıştığı anlamına gelmez.
+
+Sınırlar: serbest Türkçe her koşulu temsil etmez; desteklenen alanlar şemayla sınırlıdır. Katılımcı çıkarma belirsizse kişi tahmin edilmez, kişi listesi üzerinden düzeltme istenir. Fiyat, sessizlik, erişilebilirlik, müsaitlik ve rezervasyon için ek doğrulanmış veri kaynağı sağlanmış değildir. Gerçek kullanıcı metni/konumu değerlendirme kaydına eklenmedi.
+
 ## Llama 3 8B Geçişi
 
 26 Eylül 2026'da `llama3:8b` kuruldu ve ORTAK'ın varsayılan modeli yapıldı. Ollama model listesi ve `/health` yanıtı modelin kurulu ve hazır olduğunu doğruladı. Mevcut 12 kurgusal Türkçe örnek, Llama 3 ile birer kez çalıştırıldı: ilk deneme **9/12**, küçük doğrulama düzeltmesinden sonraki son deneme **12/12**. İlk kayıttaki üç hata fiyat, genel yakınlık ve mevcut ayarları koruma isteklerindeydi. Llama 3'ün dayanak ifadesindeki bir sözcüğü çevirmesi ve genel yakınlığı belirli bir kişiye bağlaması nedeniyle öneriler güvenli biçimde reddedilmişti. Son doğrulama, küçük yazım farkını yalnızca metinde aynı kriterin dayanağı varsa kabul eder; genel yakınlık ifadesini kişi ağırlığına dönüştürmez.

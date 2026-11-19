@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-const runtime = { production: true, csrf_token: '', max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: true, google_remaining_requests: 33 }
+const runtime = { production: true, csrf_token: '', max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: true, google_remaining_requests: 33, capabilities: { conditions_v1: true, plan_context_v1: true } }
 
 async function previewPreference(page) {
   await page.route('**/api/preferences/interpret', (route) => route.fulfill({ json: {

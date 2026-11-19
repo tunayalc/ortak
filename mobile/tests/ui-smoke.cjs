@@ -66,7 +66,7 @@ async (page) => {
   await page.getByRole('checkbox', { name: /^Tercih metnimin/ }).click();
   await page.getByRole('button', { name: 'Tercih önerisi oluştur' }).click();
   await page.getByRole('heading', { name: 'Öneriyi incele' }).waitFor();
-  check(await page.getByText('Puan %34 · Fiyat %33 · Yakınlık %33', { exact: true }).count() === 1, 'AI preview does not mutate criteria');
+  check(await page.getByText('Puan %34, Fiyat %33, Yakınlık %33', { exact: true }).count() === 1, 'AI preview does not mutate criteria');
   await page.getByRole('button', { name: 'Yapay zekâ önerisini bildir', exact: true }).click();
   await page.getByRole('button', { name: 'Tercihimi yanlış anladı', exact: true }).click();
   await page.getByText(/Bildiriminiz alındı/).waitFor();

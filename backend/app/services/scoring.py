@@ -42,6 +42,7 @@ ALL_DELTA_FOCUS_ID = "__all_delta__"
 COST_SOURCE_LABELS = {
     "manual": "Manuel maliyet",
     "google_price_level": "Google fiyat seviyesi",
+    "synthetic_price_level": "Sentetik fiyat seviyesi",
     "unknown": "Bilinmiyor; nötr kabul edildi",
     "none": "Maliyet kullanılmadı",
 }
@@ -139,7 +140,9 @@ def resolve_effective_weights(payload: RecommendationRequest) -> tuple[Effective
 
 
 def _quality_details(candidates: list[PlaceCandidate], category: str) -> dict[str, dict[str, float]]:
-    ratings = min_max_normalize([candidate.rating for candidate in candidates])
+    rated = [candidate for candidate in candidates if candidate.rating > 0]
+    known_ratings = dict(zip([candidate.id for candidate in rated], min_max_normalize([candidate.rating for candidate in rated])))
+    ratings = [known_ratings.get(candidate.id, 0.5) for candidate in candidates]
     reviews = min_max_normalize([float(candidate.review_count) for candidate in candidates])
     scores: dict[str, dict[str, float]] = {}
     for index, candidate in enumerate(candidates):
@@ -178,7 +181,7 @@ def _cost_details(
             sources[candidate.id] = "manual"
         elif candidate.price_level is not None:
             raw_values[candidate.id] = float(candidate.price_level)
-            sources[candidate.id] = "google_price_level"
+            sources[candidate.id] = "google_price_level" if candidate.provider == "google" else "synthetic_price_level"
         else:
             raw_values[candidate.id] = None
             sources[candidate.id] = "unknown"
@@ -189,6 +192,9 @@ def _cost_details(
         candidate_id: normalized_known[index]
         for index, (candidate_id, _value) in enumerate(known_items)
     }
+    if "manual" in sources.values() and any(source.endswith("price_level") for source in sources.values()):
+        # TRY and Google's ordinal price levels cannot share a numeric scale.
+        known_scores = {candidate_id: 0.5 for candidate_id in raw_values}
     return {
         candidate.id: {
             "cost_norm": known_scores.get(candidate.id, 0.5),
@@ -367,6 +373,7 @@ def _participant_proximity_details(
 
 
 def recommend(payload: RecommendationRequest) -> RecommendationResponse:
+    from .conditions import condition_warnings
     scenario = get_scenario(payload.scenario_id)
     candidates = list_candidates(payload.scenario_id)
     metrics = list_route_metrics(payload.scenario_id)
@@ -397,6 +404,17 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
             for candidate in complete_candidates
             if payload.category.lower() in candidate.category.lower() or payload.category.lower() in candidate.name.lower()
         ]
+    complete_candidates = [candidate for candidate in complete_candidates
+                           if candidate.category not in payload.conditions.excluded_categories]
+    if payload.conditions.required_features:
+        complete_candidates = []
+    if payload.conditions.budget_limit:
+        limit = payload.conditions.budget_limit
+        per_person_limit = limit.amount / len(scenario.users) if limit.scope == "group" else limit.amount
+        # Only user-entered per-person TRY costs can be compared with a TRY limit.
+        complete_candidates = [candidate for candidate in complete_candidates
+                               if (cost := payload.manual_candidate_costs.get(candidate.id, candidate.manual_cost)) is not None
+                               and cost <= per_person_limit]
 
     user_by_id = {user.id: user for user in scenario.users}
     stats = []
@@ -480,6 +498,8 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         quality_info = quality[item["candidate"].id]
         quality_score = quality_info["quality_norm"]
         cost_info = cost[item["candidate"].id]
+        if cost_info["cost_source"] == "manual":
+            item["candidate"] = item["candidate"].model_copy(update={"manual_cost": cost_info["cost_value"]})
         cost_norm = float(cost_info["cost_norm"])
         focus_norm = focus[item["candidate"].id]
         proximity_info = proximity[item["candidate"].id]
@@ -697,4 +717,7 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         focus_mode="participant_delta"
         if effective_scoring_mode == "criteria_delta"
         else effective_focus_mode,
+        conditions=payload.conditions,
+        warnings=condition_warnings(payload.conditions) + (["Manuel TL tutarları ile Google fiyat seviyeleri aynı ölçekte değildir; bu sonuçta fiyat bileşeni nötr tutuldu. Karşılaştırmak için tüm adaylara kişi başı TL tutarı girin."]
+            if any(info["cost_source"] == "manual" for info in cost.values()) and any(str(info["cost_source"]).endswith("price_level") for info in cost.values()) else []),
     )

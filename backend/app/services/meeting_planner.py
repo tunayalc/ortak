@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from ..config import get_settings
 from .preference_interpreter import LOCATION_PATTERN, PreferenceServiceError, _read_ollama_output
+from .conditions import UserConditions, condition_warnings, explicit_group_size, folded, new_topic, read_conditions
 
 
 class PlanModel(BaseModel):
@@ -26,6 +27,7 @@ class PlanBrief(PlanModel):
     environment: Literal["any", "indoor", "outdoor"] = "any"
     pace: Literal["relaxed", "active"] = "relaxed"
     interests: list[Interest] = Field(default_factory=list, max_length=6)
+    conditions: UserConditions = Field(default_factory=UserConditions)
 
     @field_validator("city", "area")
     @classmethod
@@ -43,6 +45,10 @@ class PlanBrief(PlanModel):
 class PlanInterpretRequest(PlanModel):
     text: str = Field(min_length=5, max_length=1200)
     current: PlanBrief = Field(default_factory=PlanBrief)
+    context_mode: Literal["continue", "new"] = "continue"
+    context_revision: str = Field(default="", max_length=80)
+    offered_plan_ids: list[Interest] = Field(default_factory=list, max_length=3)
+    selected_plan_id: Optional[Interest] = None
 
 
 class PlanInterpretation(PlanModel):
@@ -50,6 +56,12 @@ class PlanInterpretation(PlanModel):
     source: Literal["ollama"] = "ollama"
     model: str
     warnings: list[str]
+    questions: list[str] = Field(default_factory=list)
+    selected_plan_id: Optional[Interest] = None
+    context_revision: str = ""
+    changed_fields: list[str] = Field(default_factory=list)
+    preserved_fields: list[str] = Field(default_factory=list)
+    intent_type: Literal["plan", "new_plan", "select_plan"] = "plan"
 
 
 class PlanStep(PlanModel):
@@ -62,6 +74,7 @@ class PlanHandoff(PlanModel):
     group_size: int
     category: Literal["cafe", "park", "museum", "restaurant", "library"]
     criterion_weights: dict[str, float]
+    conditions: UserConditions = Field(default_factory=UserConditions)
 
 
 class MeetingPlan(PlanModel):
@@ -104,6 +117,7 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
     elif settings.production and brief.group_size > settings.public_max_participants:
         questions.append(f"ORTAK şu anda en fazla {settings.public_max_participants} kişilik grupları destekliyor.")
     warnings = ["Bunlar etkinlik fikirleridir; gerçek mekân, bilet, rezervasyon veya açık olma bilgisi doğrulanmış değildir."]
+    warnings.extend(condition_warnings(brief.conditions))
     if brief.budget == "low":
         warnings.append("Ekonomik seçenekler öne çıkarıldı; ücretsiz olma veya TL cinsinden bütçeye uyma garantisi yoktur.")
     if brief.area:
@@ -111,6 +125,7 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
     if questions:
         return PlanRecommendations(plans=[], questions=questions, warnings=warnings)
     candidates = [entry for entry in CATALOG if entry[5] <= brief.duration_minutes
+                  and entry[1] not in brief.conditions.excluded_categories
                   and (brief.environment == "any" or entry[2] == brief.environment)
                   and (not brief.interests or entry[0] in brief.interests)]
     candidates.sort(key=lambda e: (
@@ -128,11 +143,15 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
             reasons.append("seçtiğiniz ilgi alanı")
         if brief.environment != "any":
             reasons.append("açık alan tercihi" if environment == "outdoor" else "kapalı alan tercihi")
+        checks = [check + " ayrıca kontrol edilmeli.", "Plan süresine yolculuk dâhil değildir."]
+        if brief.conditions.budget_limit or brief.conditions.required_features:
+            checks.append("Bu bir fikir taslağıdır; zorunlu bütçe/özellik koşullarına uyduğu doğrulanmış değildir. Mekân aramasında koşullar korunur.")
         plans.append(MeetingPlan(
             id=interest, title=title, summary=summary, category=category, duration_minutes=duration,
             steps=steps, reason=", ".join(reasons) + " ile eşleşiyor.",
-            checks=[check + " ayrıca kontrol edilmeli.", "Plan süresine yolculuk dâhil değildir."],
+            checks=checks,
             handoff=PlanHandoff(city=brief.city, group_size=brief.group_size, category=category,
+                                conditions=brief.conditions,
                                 criterion_weights={"rating": 20, "cost": 60, "proximity": 20} if brief.budget == "low"
                                 else {"rating": 34, "cost": 33, "proximity": 33}),
         ))
@@ -147,8 +166,25 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         raise PreferenceServiceError("Plan yorumlama için yerel Llama hazır değil. Buluşma bilgilerini kendiniz doldurabilirsiniz.", 503)
     if LOCATION_PATTERN.search(payload.text) or re.search(r"\S+@\S+|\d[\d\s()-]{9,}\d|\b(?:no|daire)\s*[:.]?\s*\d", payload.text, re.I):
         raise PreferenceServiceError("Tam adres, harita linki, koordinat veya iletişim bilgisi yerine yalnızca şehir ve semt belirtin.", 400)
+    reset = payload.context_mode == "new" or new_topic(payload.text)
+    current = PlanBrief() if reset else payload.current
+    source = folded(payload.text)
+    # A complete ordinal-only command is safe to resolve against the displayed list.
+    ordinal = re.fullmatch(r"\s*(birinci|ikinci|ucuncu)(?:si|sini)?(?: olsun| sec)?[.!]?\s*", source)
+    previous = re.fullmatch(r"\s*(?:bunu degil )?oncekini(?: sec| istiyorum)?[.!]?\s*", source)
+    if ordinal or previous:
+        available = [] if reset else payload.offered_plan_ids
+        index = {"birinci": 0, "ikinci": 1, "ucuncu": 2}[ordinal[1]] if ordinal else (
+            available.index(payload.selected_plan_id) - 1 if payload.selected_plan_id in available else -1)
+        known = 0 <= index < len(available)
+        return PlanInterpretation(brief=current, model=settings.ollama_model, warnings=[],
+                                  questions=[] if known else ["Hangi planı kastettiğiniz belli değil; planın adını veya sıra numarasını belirtin."],
+                                  selected_plan_id=available[index] if known else None,
+                                  intent_type="select_plan",
+                                  context_revision=payload.context_revision)
     # All extracted values remain a proposal: clients must show an editable review before use.
     schema = PlanBrief.model_json_schema()
+    schema["properties"].pop("conditions")
     schema["required"] = list(schema["properties"])
     instructions = (
         "Extract a meeting brief from Turkish text. Return only the requested JSON. "
@@ -158,6 +194,8 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         "'İstanbul Kadıköy' means city='İstanbul', area='Kadıköy'; never put both in area. "
         "Unknown group_size: null. We three people means 3 total, not 4. "
         "Keep unspecified current values. duration_minutes is total activity time excluding travel, 30-360. "
+        "Respect negations and follow-up edits. 'daha sakin' changes pace only. 'olmasin/istemiyorum' excludes, not includes. "
+        "Explicit money limits and excluded venues are handled by backend; never convert them into group_size or time. "
         "budget low means affordability preference only, never a guaranteed price. "
         "interests definitions: conversation=sohbet/tanışma; nature=yürüyüş/doğa/park; "
         "culture=müze/sergi/sanat gezisi; food=yemek/restoran; study=ders/çalışma/kütüphane; "
@@ -165,7 +203,7 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         "Walking is nature, NOT conversation. Eating is food, NOT conversation. "
         "Meeting friends alone does NOT imply conversation; absent activity means interests=[]. "
         "Do not output real events, venues, dates, opening hours or prices. Current brief: "
-        + payload.current.model_dump_json()
+        + current.model_dump_json(exclude={"conditions"})
     )
     owns_client = client is None
     if owns_client:
@@ -178,20 +216,57 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         })
         response.raise_for_status()
         raw = _read_ollama_output(response.json())
-        if set(raw) != set(PlanBrief.model_fields):
+        if set(raw) not in (set(PlanBrief.model_fields), set(PlanBrief.model_fields) - {"conditions"}):
             raise ValueError("incomplete brief")
         brief = PlanBrief.model_validate(raw)
         warnings = [
             "Yorumlanan bilgileri kontrol edin. Tarih, hava durumu, özel ihtiyaçlar ve gerçek fiyatlar bu aşamada doğrulanmaz."
         ]
-        def folded(value):
-            return value.translate(str.maketrans("İıŞşĞğÜüÖöÇç", "iiSsGgUuOoCc")).lower()
         for field in ("city", "area"):
             value = getattr(brief, field)
-            if value and folded(value) not in folded(payload.text) and value != getattr(payload.current, field):
-                setattr(brief, field, getattr(payload.current, field))
+            if value != getattr(current, field) and (not value or folded(value) not in source):
+                setattr(brief, field, getattr(current, field))
                 warnings.append("Metinde doğrulanamayan bir yer adı kullanılmadı. Şehir ve semti kontrol edin.")
-        return PlanInterpretation(brief=brief, model=settings.ollama_model, warnings=list(dict.fromkeys(warnings)))
+        signals = {
+            "group_size": r"kisi|arkadas|[2-9] kisiyiz|ikimiz|ucumuz|dordumuz",
+            "duration_minutes": r"dakika|\bdk\b|saat",
+            "budget": r"butce|ucuz|ekonomik|pahali|fiyat|hesapli",
+            "environment": r"acik|kapali|iceri|disari",
+            "pace": r"sakin|sessi[zsz]|hareketli|aktif|yavas|tempo",
+            "interests": r"sohbet|tanis|dog[aâ]|yuruy|park|muze|sergi|kultur|yemek|restoran|ders|calis|kutuphane|cizim|yaratic|uret",
+        }
+        for field, pattern in signals.items():
+            if not re.search(pattern, source) and getattr(brief, field) != getattr(current, field):
+                setattr(brief, field, getattr(current, field))
+                warnings.append("Belirtilmeyen ayarlar korundu.")
+        group_size = explicit_group_size(payload.text)
+        brief.group_size = group_size if group_size is not None and 2 <= group_size <= 12 else current.group_size
+        # These exact semantic edits do not consume or overwrite other clauses.
+        if re.search(r"\b(?:daha )?sakin(?: olsun| bir| ve|$)|\bsessiz\b", source) and not re.search(r"sakin (?:olmasin|degil)|sessiz (?:olmasin|degil)", source):
+            brief.pace = "relaxed"
+        if re.search(r"\b(?:ekonomik|hesapli|ucuz)\b", source) and not re.search(r"(?:ekonomik|hesapli|ucuz) (?:olmasin|degil)", source):
+            brief.budget = "low"
+        brief.conditions, questions = read_conditions(payload.text, current.conditions)
+        if group_size is not None and not 2 <= group_size <= 12:
+            questions.append("Katılımcı sayısı 2 ile 12 arasında olmalı.")
+        if re.search(r"onceki butce (?:kalsin|korunsun)|butce ayni", source):
+            brief.budget = current.budget
+            brief.conditions.budget_limit = current.conditions.budget_limit
+        if re.search(r"o kisi|kimse gelmeyecek|kisi gelmeyecek", source):
+            brief.group_size = current.group_size
+            questions.append("Kaç kişi kalacağınızı açıkça belirtin; katılımcı sayısı tahmin edilmedi.")
+        for interest, category, *_ in CATALOG:
+            if category in brief.conditions.excluded_categories:
+                brief.interests = [item for item in brief.interests if item != interest]
+        if re.search(r"acik.{0,20}kapali|kapali.{0,20}acik", source) and "fark etmez" not in source:
+            questions.append("Açık alan mı kapalı alan mı zorunlu? Ortam tercihini netleştirin.")
+            brief.environment = current.environment
+        warnings.extend(condition_warnings(brief.conditions))
+        return PlanInterpretation(brief=brief, model=settings.ollama_model, warnings=list(dict.fromkeys(warnings)),
+                                  questions=questions, context_revision=payload.context_revision,
+                                  intent_type="new_plan" if reset else "plan",
+                                  changed_fields=[field for field in PlanBrief.model_fields if getattr(current, field) != getattr(brief, field)],
+                                  preserved_fields=[field for field in PlanBrief.model_fields if getattr(current, field) == getattr(brief, field)])
     except httpx.TimeoutException as exc:
         raise PreferenceServiceError("Plan yorumlama zaman aşımına uğradı. Mevcut bilgileriniz değişmedi.", 504) from exc
     except httpx.HTTPStatusError as exc:

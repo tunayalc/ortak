@@ -1,6 +1,7 @@
 export const emptyBrief = {
   city: '', area: '', group_size: null, duration_minutes: 120,
   budget: 'unspecified', environment: 'any', pace: 'relaxed', interests: [],
+  conditions: { budget_limit: null, excluded_categories: [], required_features: [] },
 }
 export const planInterests = [
   ['conversation', 'Sohbet'], ['nature', 'Doğa'], ['culture', 'Kültür'],
@@ -24,6 +25,17 @@ export function planSearchInput(handoff, maxParticipants = 8) {
   return {
     city: handoff.city.trim(), category: handoff.category, group_size: handoff.group_size,
     weights: { rating: weights.rating, cost: weights.cost, proximity: weights.proximity },
+    conditions: checkedConditions(handoff.conditions),
     participants: Array.from({ length: handoff.group_size }, (_, i) => ({ label: `Katılımcı ${i + 1}`, value: '', delta_weight: 1 })),
   }
+}
+
+export function checkedConditions(value) {
+  const conditions = value || { budget_limit: null, excluded_categories: [], required_features: [] }
+  const budget = conditions.budget_limit
+  if (budget && (!Number.isFinite(budget.amount) || budget.amount <= 0 || budget.amount > 10_000_000 ||
+    budget.currency !== 'TRY' || !['group', 'per_person'].includes(budget.scope))) throw new Error('TL bütçesini ve kapsamını kontrol edin.')
+  if (!Array.isArray(conditions.excluded_categories) || conditions.excluded_categories.some(id => !['cafe', 'restaurant', 'park', 'museum', 'library'].includes(id)) ||
+    !Array.isArray(conditions.required_features) || conditions.required_features.some(id => !['quiet', 'accessible', 'alcohol_free'].includes(id))) throw new Error('Kesin koşullar doğrulanamadı.')
+  return structuredClone(conditions)
 }

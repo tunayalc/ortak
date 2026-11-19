@@ -105,6 +105,7 @@ def runtime_config(request: Request):
     usage = usage_status()
     return {
         "production": settings.production,
+        "capabilities": {"conditions_v1": True, "plan_context_v1": True},
         "csrf_token": request.session.get("csrf", "") if settings.production else "",
         "max_participants": settings.public_max_participants if settings.production else 12,
         "max_candidates": settings.public_max_candidates if settings.production else 12,

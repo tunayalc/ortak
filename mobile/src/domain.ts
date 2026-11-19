@@ -1,4 +1,5 @@
 import type { Candidate, CriterionWeights, Participant, Preferences, RouteMetric, SearchInput, Suggestion } from './types';
+import { validateConditions } from './conditions';
 
 export const categories = [
   { id: 'cafe', label: 'Kafe' }, { id: 'restaurant', label: 'Restoran' },
@@ -44,6 +45,7 @@ export function participantWeights(participants: Participant[]): Record<string, 
 }
 
 export function validateSuggestion(value: Suggestion, participants: Participant[]): Suggestion {
+  validateConditions(value.conditions);
   const weights = normalizeWeights(value.criterion_weights);
   const expected = participants.map((_, i) => `user-${i + 1}`);
   const actual = Object.keys(value.participant_proximity_weights);

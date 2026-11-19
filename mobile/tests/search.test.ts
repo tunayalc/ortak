@@ -43,6 +43,14 @@ test('quota and invalid weights fail before any paid operation', async () => {
   await assert.rejects(session.run(input(), { ...initialPreferences, weights: { rating: 0, cost: 0, proximity: 0 } }, config, () => {}));
   assert.equal(Object.values(calls).reduce((a, b) => a + b), 0);
 });
+
+test('invalid budget or unsupported condition contract fails before paid work', async () => {
+  const { calls, session } = fixture();
+  const conditions = { budget_limit: { amount: 2000, scope: 'group' as const, currency: 'TRY' as const }, excluded_categories: [], required_features: [] };
+  await assert.rejects(session.run(input(), { ...initialPreferences, conditions }, config, () => {}), /kesin koşulları/);
+  await assert.rejects(session.run(input(), { ...initialPreferences, conditions: { ...conditions, budget_limit: { ...conditions.budget_limit, amount: NaN } } }, { ...config, capabilities: { conditions_v1: true } }, () => {}), /Bütçe/);
+  assert.equal(Object.values(calls).reduce((a, b) => a + b), 0);
+});
 test('changing coordinates requires explicit deletion and does not leak previous results', async () => {
   const { calls, session } = fixture();
   await session.run(input(), initialPreferences, config, () => {});

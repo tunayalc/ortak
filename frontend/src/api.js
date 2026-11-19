@@ -1,6 +1,17 @@
 const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '/api')
 const USE_VERCEL_GATEWAY = import.meta.env.VITE_VERCEL_GATEWAY === '1'
 let csrfToken = ''
+let capabilities = {}
+
+function ensureConditions(value) {
+  if (value && (value.budget_limit || value.excluded_categories?.length || value.required_features?.length) && !capabilities.conditions_v1) {
+    throw new Error('Bu sunucu kesin koşulları henüz desteklemiyor. Koşullarınızı kaldırmadan güncel sürüme bağlanın.')
+  }
+}
+
+function ensureContext() {
+  if (!capabilities.conditions_v1 || !capabilities.plan_context_v1) throw new Error('Sunucu bağlamı koruyan yorumlama sürümünü henüz desteklemiyor. Manuel kontroller kullanılabilir.')
+}
 
 async function request(path, options = {}) {
   const url = USE_VERCEL_GATEWAY ? `/api/orak-gateway?path=${encodeURIComponent(path)}` : `${API_BASE}${path}`
@@ -31,22 +42,25 @@ export const api = {
   runtimeConfig: async () => {
     const config = await request('/runtime-config')
     csrfToken = config.csrf_token || ''
+    capabilities = config.capabilities || {}
     return config
   },
   deleteScenario: (id) => request(`/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   health: () => request('/health'),
-  interpretPlan: (body) => request('/plans/interpret', { method: 'POST', body: JSON.stringify(body) }),
-  recommendPlans: (body) => request('/plans/recommend', { method: 'POST', body: JSON.stringify(body) }),
+  interpretPlan: (body) => { ensureContext(); return request('/plans/interpret', { method: 'POST', body: JSON.stringify(body) }) },
+  recommendPlans: (body) => { ensureConditions(body.conditions); return request('/plans/recommend', { method: 'POST', body: JSON.stringify(body) }) },
   parseLocations: (body) =>
     request('/locations/parse', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  interpretPreferences: (body) =>
-    request('/preferences/interpret', {
+  interpretPreferences: (body) => {
+    ensureContext()
+    return request('/preferences/interpret', {
       method: 'POST',
       body: JSON.stringify(body),
-    }),
+    })
+  },
   createScenario: (body) =>
     request('/scenarios', {
       method: 'POST',
@@ -62,14 +76,18 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  recommend: (body) =>
-    request('/recommendations', {
+  recommend: (body) => {
+    ensureConditions(body.conditions)
+    return request('/recommendations', {
       method: 'POST',
       body: JSON.stringify(body),
-    }),
-  runExperiment: (body) =>
-    request('/experiments/run', {
+    })
+  },
+  runExperiment: (body) => {
+    ensureConditions(body.conditions)
+    return request('/experiments/run', {
       method: 'POST',
       body: JSON.stringify(body),
-    }),
+    })
+  },
 }

@@ -41,7 +41,8 @@ def test_constraints_steps_handoff_and_no_price_promises(environment, interests,
         assert all(step.minutes > 0 for step in item.steps)
         assert item.handoff.group_size == 3 and item.handoff.city == "Ankara"
         assert sum(item.handoff.criterion_weights.values()) == 100
-        assert set(item.handoff.model_dump()) == {"city", "category", "group_size", "criterion_weights"}
+        assert set(item.handoff.model_dump()) == {"city", "category", "group_size", "criterion_weights", "conditions"}
+        assert item.handoff.conditions == brief().conditions
         assert "price" not in item.model_dump()
         if interests:
             assert item.id in interests

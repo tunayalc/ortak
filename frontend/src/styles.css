@@ -26,6 +26,12 @@
   --error-border: #d897a8;
   --focus-ring: #247968;
   --primary-soft: rgba(35, 36, 39, 0.10);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --control-height: 44px;
+  --radius-control: 4px;
   color: var(--text);
   background: var(--bg);
   font-family: "Helvetica Neue", Arial, sans-serif;
@@ -71,6 +77,38 @@
 }
 
 [hidden] { display: none !important; }
+.workflow-nav { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.workflow-nav a { display: flex; gap: 10px; align-items: center; min-height: var(--control-height); color: var(--secondary); text-decoration: none; padding: 4px 8px; border-radius: var(--radius-control); }
+.workflow-nav a[aria-current] { color: var(--text); background: var(--surface-high); font-weight: 600; }
+.workflow-nav a span { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--border-strong); border-radius: 50%; font-variant-numeric: tabular-nums; }
+[tabindex='-1'] { scroll-margin-top: 20px; }
+.status-notice { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border-left: 3px solid var(--border-strong); background: var(--surface-low); color: var(--text); overflow-wrap: anywhere; }
+.status-notice > svg { flex-shrink: 0; margin-top: 2px; }
+.status-error { border-color: var(--error-border); background: var(--error-bg); color: var(--error-text); }
+.status-success { background: var(--success-bg); color: var(--success-text); }
+.conditions-editor { margin: 16px 0; padding: 16px 0; border: 0; border-top: 1px solid var(--border); min-width: 0; }
+.conditions-editor legend { padding: 0 8px 0 0; font-weight: 600; }
+.conditions-money { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.conditions-money label { display: grid; gap: 8px; }
+.conditions-money input, .conditions-money select { width: 100%; min-width: 0; }
+.condition-options { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px; }
+.condition-options label, .condition-feature { display: flex !important; align-items: center; gap: 8px; min-height: 44px; }
+.conditions-editor input[type='checkbox'] { min-height: 20px; width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--focus-ring); }
+.condition-summary { font-size: 13px; overflow-wrap: anywhere; }
+.secondary-options { border-block: 1px solid var(--border); padding: 12px 0; margin: 16px 0; }
+.secondary-options summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+button, input:not([type='checkbox']):not([type='range']), select { min-height: var(--control-height); }
+button, label, p, a { overflow-wrap: anywhere; }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+dialog { max-height: calc(100dvh - 32px); overflow-y: auto; }
+@media (max-width: 760px) {
+  .conditions-money { grid-template-columns: minmax(0, 1fr); }
+  .workflow-nav { gap: 4px; }
+  .workflow-nav a { flex: 1 1 100px; padding: 4px; font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
 .engine-nav { display: flex; border-bottom: 1px solid var(--border); gap: 24px; }
 .engine-nav button { background: none; color: var(--secondary); display: flex; align-items: center; gap: 8px; padding: 16px 0; min-height: 52px; border-bottom: 3px solid transparent; }
 .engine-nav button[aria-current] { color: var(--text); border-bottom-color: var(--text); font-weight: 600; }
@@ -90,7 +128,7 @@
 .planner-fields input, .planner-fields select { min-width: 0; width: 100%; }
 .planner-interests { display: flex; flex-wrap: wrap; gap: 12px 20px; padding: 0; border: 0; margin: 0; }
 .planner-interests legend { margin-bottom: 10px; color: var(--secondary); }
-.planner-interests label { display: flex; align-items: center; min-height: 36px; }
+.planner-interests label { display: flex; align-items: center; min-height: 44px; }
 .planner-proposal { border-left: 3px solid var(--focus-ring); padding-left: 16px; overflow-wrap: anywhere; }
 .planner-empty { margin-top: 20px; padding: 48px 24px; background: var(--surface-low); text-align: center; color: var(--secondary); }
 .planner-empty h3 { color: var(--text); font-size: 19px; font-weight: 500; }
@@ -292,7 +330,7 @@ a:focus-visible {
 
 .assistant-entry {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, .7fr) minmax(0, 2fr) auto;
   align-items: end;
   gap: 10px;
 }

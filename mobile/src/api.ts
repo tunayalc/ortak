@@ -1,6 +1,8 @@
 import type { Candidate, FeedbackReason, Health, ParsedLocation, Participant, Preferences, RecommendationResponse, RouteMetric, RuntimeConfig, Scenario, SearchInput, Suggestion } from './types';
 import { normalizeWeights, participantWeights } from './domain';
 import type { PlanBrief, PlanInterpretation, PlanResult } from './planner';
+import { conditionLines, validateConditions } from './conditions';
+import type { UserConditions } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -14,6 +16,14 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
   let token = '';
   let expiresAt = 0;
   let opening: Promise<void> | null = null;
+  let supportsConditions = false;
+  function ensureContext() {
+    if (!supportsConditions) throw new ApiError('Sunucu bağlamı koruyan yorumlamayı henüz desteklemiyor. Manuel kontroller kullanılabilir.', 409);
+  }
+  function ensureConditions(value?: UserConditions) {
+    validateConditions(value);
+    if (conditionLines(value).length && !supportsConditions) throw new ApiError('Sunucu kesin koşulları henüz desteklemiyor. Koşullar korunarak işlem durduruldu.', 409);
+  }
 
   async function raw<T>(path: string, method: string, body?: unknown, authenticated = true): Promise<T> {
     const abort = new AbortController();
@@ -65,10 +75,10 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
     connect,
     expiresAt: () => expiresAt,
     forget: () => { token = ''; expiresAt = 0; },
-    runtime: () => request<RuntimeConfig>('/runtime-config'),
+    runtime: async () => { const value = await request<RuntimeConfig>('/runtime-config'); supportsConditions = value.capabilities?.conditions_v1 === true; return value; },
     health: () => request<Health>('/health'),
-    interpretPlan: (text: string, current: PlanBrief) => request<PlanInterpretation>('/plans/interpret', { text, current }),
-    recommendPlans: (brief: PlanBrief) => request<PlanResult>('/plans/recommend', brief),
+    interpretPlan: (text: string, current: PlanBrief, context: { offered_plan_ids?: string[]; selected_plan_id?: string | null } = {}) => { ensureContext(); return request<PlanInterpretation>('/plans/interpret', { text, current, ...context }); },
+    recommendPlans: (brief: PlanBrief) => { ensureConditions(brief.conditions); return request<PlanResult>('/plans/recommend', brief); },
     parse: (participants: Participant[]) => request<ParsedLocation[]>('/locations/parse', { items: participants }),
     create: (input: SearchInput, parsed: ParsedLocation[]) => request<Scenario>('/scenarios', {
       city: input.city.trim(), category: input.category, group_size: input.participants.length,
@@ -77,15 +87,17 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
     }),
     candidates: (id: string, maximum: number) => request<Candidate[]>('/candidates/search', { scenario_id: id, max_results: maximum }),
     routes: (id: string) => request<RouteMetric[]>('/routes/matrix', { scenario_id: id, provider: 'google' }),
-    recommend: (id: string, participants: Participant[], preferences: Preferences) => request<RecommendationResponse>('/recommendations', {
+    recommend: (id: string, participants: Participant[], preferences: Preferences) => { ensureConditions(preferences.conditions); return request<RecommendationResponse>('/recommendations', {
       scenario_id: id, scoring_mode: 'criteria_delta', k: preferences.k,
       criterion_weights: normalizeWeights(preferences.weights), participant_proximity_weights: participantWeights(participants),
       min_rating: preferences.minRating, max_duration_minutes: preferences.maxMinutes, use_adjusted_durations: false,
-    }),
-    interpret: (text: string, participants: Participant[], preferences: Preferences) => request<Suggestion>('/preferences/interpret', {
+      conditions: preferences.conditions,
+    }); },
+    interpret: (text: string, participants: Participant[], preferences: Preferences) => { ensureContext(); return request<Suggestion>('/preferences/interpret', {
       text: text.trim(), participants: participants.map((p, i) => ({ id: `user-${i + 1}`, label: p.label, delta_weight: p.delta_weight })),
       criterion_weights: preferences.weights, min_rating: preferences.minRating, max_duration_minutes: preferences.maxMinutes,
-    }),
+      conditions: preferences.conditions,
+    }); },
     report: (reason: FeedbackReason, weights: Suggestion['criterion_weights']) => request<{ id: string }>('/mobile/feedback', { reason, criterion_weights: normalizeWeights(weights) }),
     deleteScenario: (id: string) => request<void>(`/scenarios/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   };

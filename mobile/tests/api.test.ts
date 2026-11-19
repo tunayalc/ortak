@@ -38,9 +38,10 @@ test('resolved coordinates sent to scenario; original link remains in form', asy
   let body: Record<string, any> = {};
   const api = createApi('https://api.test', async (url, init) => {
     if (String(url).endsWith('/mobile/session')) return session();
+    if (String(url).endsWith('/runtime-config')) return response({ capabilities: { conditions_v1: true } });
     body = JSON.parse(String(init!.body)); return response({});
   });
-  await api.connect();
+  await api.connect(); await api.runtime();
   const people = makeParticipants(2); people[0]!.value = 'https://maps.app.goo.gl/example';
   await api.create({ city: 'Ankara', category: 'cafe', participants: people }, people.map(p => ({ ...p, lat: 39.92, lng: 32.85, error: null })));
   assert.equal(body.participant_locations[0].value, '39.92,32.85');

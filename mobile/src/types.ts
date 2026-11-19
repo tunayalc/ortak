@@ -1,4 +1,8 @@
 export type CriterionWeights = { rating: number; cost: number; proximity: number };
+export type UserConditions = {
+  budget_limit: { amount: number; scope: 'per_person' | 'group'; currency: 'TRY' } | null;
+  excluded_categories: Category[]; required_features: ('quiet' | 'accessible' | 'alcohol_free')[];
+};
 export type Participant = { label: string; value: string; delta_weight: number };
 export type ParsedLocation = Participant & { lat: number | null; lng: number | null; error: string | null };
 export type Category = 'cafe' | 'restaurant' | 'library' | 'park' | 'museum';
@@ -8,8 +12,10 @@ export type Preferences = {
   minRating: number | null;
   maxMinutes: number | null;
   k: number;
+  conditions?: UserConditions;
 };
 export type RuntimeConfig = {
+  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean };
   production: boolean;
   max_participants: number;
   max_candidates: number;
@@ -44,11 +50,13 @@ export type Recommendation = {
 };
 export type RecommendationResponse = {
   scenario: Scenario; valid_alternatives: number; recommendations: Recommendation[]; criterion_weights: CriterionWeights;
+  conditions?: UserConditions; warnings?: string[];
 };
 export type Suggestion = {
   criterion_weights: CriterionWeights;
   participant_proximity_weights: Record<string, number>;
   min_rating: number | null; max_duration_minutes: number | null;
   explanation: string; warnings: string[]; source: string; model: string;
+  conditions?: UserConditions; questions?: string[];
 };
 export type FeedbackReason = 'incorrect_preferences' | 'unsafe_response' | 'other';

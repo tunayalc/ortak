@@ -1,12 +1,26 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel as PydanticModel, ConfigDict, Field, field_validator
 
 
 class BaseModel(PydanticModel):
     model_config = ConfigDict(allow_inf_nan=False)
+
+
+class MoneyLimit(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    amount: float = Field(gt=0, le=10_000_000)
+    scope: Literal["per_person", "group"]
+    currency: Literal["TRY"] = "TRY"
+
+
+class UserConditions(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    budget_limit: MoneyLimit | None = None
+    excluded_categories: list[Literal["cafe", "restaurant", "park", "museum", "library"]] = Field(default_factory=list, max_length=5)
+    required_features: list[Literal["quiet", "accessible", "alcohol_free"]] = Field(default_factory=list, max_length=3)
 
 
 class Coordinate(BaseModel):
@@ -161,6 +175,9 @@ class PreferenceInterpretRequest(BaseModel):
     criterion_weights: CriterionWeights = Field(default_factory=CriterionWeights)
     min_rating: Optional[float] = Field(default=None, ge=0, le=5)
     max_duration_minutes: Optional[float] = Field(default=None, ge=1)
+    conditions: UserConditions = Field(default_factory=UserConditions)
+    context_mode: Literal["continue", "new"] = "continue"
+    context_revision: str = Field(default="", max_length=80)
 
 
 class PreferenceSuggestion(BaseModel):
@@ -172,6 +189,12 @@ class PreferenceSuggestion(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     source: str = "ollama"
     model: str = ""
+    conditions: UserConditions = Field(default_factory=UserConditions)
+    questions: list[str] = Field(default_factory=list)
+    context_revision: str = ""
+    changed_fields: list[str] = Field(default_factory=list)
+    preserved_fields: list[str] = Field(default_factory=list)
+    intent_type: Literal["preferences", "new_preferences"] = "preferences"
 
 
 class RecommendationRequest(BaseModel):
@@ -196,6 +219,7 @@ class RecommendationRequest(BaseModel):
     focus_user_id: Optional[str] = None
     focus_mode: Optional[str] = None
     use_adjusted_durations: bool = False
+    conditions: UserConditions = Field(default_factory=UserConditions)
 
     @field_validator("priority_profile")
     @classmethod
@@ -328,10 +352,16 @@ class RecommendationResponse(BaseModel):
     priority_weights: PriorityWeights = Field(default_factory=PriorityWeights)
     criterion_weights: CriterionWeights = Field(default_factory=CriterionWeights)
     focus_mode: str = "none"
+    conditions: UserConditions = Field(default_factory=UserConditions)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ExperimentRequest(BaseModel):
     scenario_id: str
+    conditions: UserConditions = Field(default_factory=UserConditions)
+    min_rating: Optional[float] = Field(default=None, ge=0, le=5)
+    max_duration_minutes: Optional[float] = Field(default=None, ge=1)
+    category: Optional[str] = None
     scoring_mode: str = "criteria_delta"
     lambda_value: Optional[float] = Field(default=None, ge=0, le=1)
     k: int = Field(default=5, ge=1, le=20)

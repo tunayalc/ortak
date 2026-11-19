@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from ..config import get_settings
 from ..schemas import PreferenceInterpretRequest, PreferenceSuggestion
 from .preference_edits import apply_edits, edit_messages, edit_schema
+from .conditions import UserConditions, condition_warnings, new_topic, read_conditions
+from ..schemas import CriterionWeights
 
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
@@ -69,7 +71,7 @@ async def llm_status(client: httpx.AsyncClient | None = None) -> dict[str, objec
 
 def _anonymous_text(payload: PreferenceInterpretRequest) -> str:
     text = payload.text.strip()
-    if LOCATION_PATTERN.search(text):
+    if LOCATION_PATTERN.search(text) or re.search(r"\S+@\S+|\d[\d\s()-]{9,}\d|\b(?:no|daire)\s*[:.]?\s*\d", text, re.I):
         raise PreferenceServiceError(
             "Tercih metnine konum bağlantısı veya koordinat eklemeyin; bunları kişi konumu alanına girin.",
             status_code=400,
@@ -205,11 +207,25 @@ def _validate_suggestion(
     if not DURATION_LIMIT_PATTERN.search(payload.text) and suggestion.max_duration_minutes != payload.max_duration_minutes:
         suggestion.max_duration_minutes = payload.max_duration_minutes
         suggestion.warnings.append("Sayısal süre sınırı belirtilmediği için mevcut sınır korundu.")
-    if MONEY_PATTERN.search(payload.text):
-        suggestion.warnings.append(
-            "Gerçek menü fiyatı bulunmadığı için TL cinsinden bütçe sınırı uygulanamaz. "
-            "Fiyat uygunluğu yalnızca fiyat seviyesi veya manuel maliyetle değerlendirilir."
-        )
+    suggestion.conditions, suggestion.questions = read_conditions(payload.text, payload.conditions)
+    if MONEY_PATTERN.search(payload.text) and not suggestion.conditions.budget_limit:
+        suggestion.warnings.append("Kapsamı belirsiz bütçe sınırı uygulanamaz; kişi başı veya toplam olduğunu belirtin.")
+    suggestion.warnings.extend(condition_warnings(suggestion.conditions))
+    if re.search(r"\b(?:bana|benim|o kişi|ikincisi)\b", anonymous, re.I) and not has_person_reference:
+        suggestion.questions.append("Hangi katılımcıyı kastettiğinizi adıyla veya sıra numarasıyla belirtin.")
+    if re.search(r"gelmeyecek|katılmayacak", anonymous, re.I):
+        suggestion.questions.append("Katılımcı değişikliğini kişi listesinden yapın; konumlar ve rotalar yeniden doğrulanmalı.")
+    suggestion.context_revision = payload.context_revision
+    comparisons = {
+        "criterion_weights": (payload.criterion_weights, suggestion.criterion_weights),
+        "participant_proximity_weights": (current_people, suggestion.participant_proximity_weights),
+        "min_rating": (payload.min_rating, suggestion.min_rating),
+        "max_duration_minutes": (payload.max_duration_minutes, suggestion.max_duration_minutes),
+        "conditions": (payload.conditions, suggestion.conditions),
+    }
+    suggestion.changed_fields = [key for key, (before, after) in comparisons.items() if before != after]
+    suggestion.preserved_fields = [key for key, (before, after) in comparisons.items() if before == after]
+    suggestion.intent_type = "new_preferences" if payload.context_mode == "new" or new_topic(payload.text) else "preferences"
     # Describe validated settings, not the model's potentially inconsistent prose.
     changed_people = sum(suggestion.participant_proximity_weights[person.id] != person.delta_weight for person in payload.participants)
     summary = f"Önerilen ağırlıklar: puan {weights.rating:g}, fiyat {weights.cost:g}, yakınlık {weights.proximity:g}."
@@ -234,6 +250,12 @@ async def interpret_preferences(
             "Yapay zekâ bağlantısı kapalı veya yapılandırılmamış. Seçilen sağlayıcının ayarlarını kontrol edin.",
             status_code=503,
         )
+    if payload.context_mode == "new" or new_topic(payload.text):
+        payload = payload.model_copy(update={
+            "criterion_weights": CriterionWeights(), "conditions": UserConditions(),
+            "min_rating": None, "max_duration_minutes": None,
+            "participants": [person.model_copy(update={"delta_weight": 1.0}) for person in payload.participants],
+        })
     ids = [participant.id for participant in payload.participants]
     if len(ids) != len(set(ids)):
         raise PreferenceServiceError("Kişi kimlikleri benzersiz olmalıdır.", status_code=400)
@@ -253,6 +275,7 @@ async def interpret_preferences(
         ],
         "current_min_rating": payload.min_rating,
         "current_max_duration_minutes": payload.max_duration_minutes,
+        "conditions": payload.conditions.model_dump(),
     }
     instructions = (
         "You edit meeting-place preference settings from a Turkish user request. Return JSON. "
@@ -278,7 +301,7 @@ async def interpret_preferences(
         headers = {}
         body = {
             "model": settings.ollama_model,
-            "messages": edit_messages(ids, text),
+            "messages": edit_messages(ids, text, context),
             "format": edit_schema(ids),
             "stream": False,
             "options": {"temperature": 0, "num_predict": 1024},

@@ -18,3 +18,14 @@ test('plan handoff rejects unsupported group and invalid weights', () => {
   assert.throws(() => planSearchInput({ ...handoff, group_size: 9 }, 8));
   assert.throws(() => planSearchInput({ ...handoff, criterion_weights: { rating: NaN, cost: 1, proximity: 1 } }, 8));
 });
+
+test('conditions survive handoff without sharing mutable state', () => {
+  const source: PlanHandoff = { ...handoff, conditions: { budget_limit: { amount: 2000, currency: 'TRY', scope: 'group' }, excluded_categories: ['museum'], required_features: [] } };
+  const next = planSearchInput(source, 8);
+  assert.equal(next.preferences.conditions?.budget_limit?.scope, 'group');
+  next.preferences.conditions!.budget_limit!.amount = 3000;
+  next.preferences.conditions!.excluded_categories.push('park');
+  assert.equal(source.conditions!.budget_limit!.amount, 2000);
+  assert.deepEqual(source.conditions!.excluded_categories, ['museum']);
+  assert.throws(() => planSearchInput({ ...source, conditions: { ...source.conditions!, budget_limit: { amount: NaN, currency: 'TRY', scope: 'group' } } }, 8));
+});

@@ -26,7 +26,8 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import MeetingPlanner from './MeetingPlanner'
-import { planSearchInput } from './planner'
+import { ConditionsEditor, ConditionsSummary, emptyConditions, StatusNotice, WorkflowNav } from './ui'
+import { checkedConditions, planSearchInput } from './planner'
 
 const categories = [
   { value: 'cafe', label: 'Kafe' },
@@ -156,6 +157,7 @@ function costSourceLabel(source) {
   const labels = {
     manual: 'Manuel maliyet',
     google_price_level: 'Google fiyat seviyesi',
+    synthetic_price_level: 'Sentetik fiyat seviyesi',
     unknown: 'Bilinmiyor; nötr kabul edildi',
     none: 'Maliyet kullanılmadı',
   }
@@ -366,6 +368,9 @@ function PreferenceAssistant({
   googleConfigured,
   onDiscard,
   busy,
+  interpreting,
+  contextMode,
+  setContextMode,
 }) {
   const available = health?.ai_ready === true || health?.ai_status === 'configured'
   const modelName = {
@@ -393,7 +398,7 @@ function PreferenceAssistant({
     (suggestion.min_rating === null || (suggestion.min_rating >= 0 && suggestion.min_rating <= 5)) &&
     (suggestion.max_duration_minutes === null || suggestion.max_duration_minutes >= 1)
   )
-  const validSuggestion = criteriaTotal > 0 && criteriaValid && personWeightsValid && constraintsValid
+  const validSuggestion = criteriaTotal > 0 && criteriaValid && personWeightsValid && constraintsValid && !suggestion?.questions?.length
   const updateCriterion = (key, value) => onChangeSuggestion((current) => ({
     ...current,
     criterion_weights: { ...current.criterion_weights, [key]: Number(value) },
@@ -408,13 +413,15 @@ function PreferenceAssistant({
         <Sparkles size={19} />
         <div>
           <h2>Tercihini anlat</h2>
-          <span role="status">{modelName && `${health.ai_provider === 'ollama' ? 'Yerel model' : 'Bulut modeli'}: ${modelName} · `}{connectionStatus}</span>
+          <span role="status">{modelName && `${health.ai_provider === 'ollama' ? 'Yerel model' : 'Bulut modeli'}: ${modelName} - `}{connectionStatus}</span>
         </div>
         <button className="icon-button assistant-connection" title="Model bağlantısını yenile" aria-label="Model bağlantısını yenile" onClick={onCheckConnection} disabled={checkingConnection || Boolean(busy)}>
           {checkingConnection ? <Loader2 size={17} className="spin" /> : <RefreshCcw size={17} />}
         </button>
       </div>
       <div className="assistant-entry">
+        <label>Tercih bağlamı<select value={contextMode} onChange={e => setContextMode(e.target.value)}>
+          <option value="continue">Mevcut koşulları koru</option><option value="new">Yeni tercih isteği</option></select></label>
         <label>
           Seçim isteği
           <textarea
@@ -425,11 +432,12 @@ function PreferenceAssistant({
             disabled={!available || Boolean(busy)}
           />
         </label>
-        <button className="secondary" onClick={onInterpret} disabled={!available || Boolean(busy) || text.trim().length < 5}>
-          {busy === 'interpret' ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
-          {busy === 'interpret' ? 'Yorumlanıyor' : 'Tercihi yorumla'}
+        <button className="secondary" onClick={onInterpret} disabled={!available || Boolean(busy) || interpreting || text.trim().length < 5}>
+          {interpreting ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
+          {interpreting ? 'Yorumlanıyor' : 'Tercihi yorumla'}
         </button>
       </div>
+      {interpreting && <StatusNotice kind="loading">Tercih yorumlanıyor; mevcut ayarlar korunuyor.</StatusNotice>}
       {suggestion && (
         <div className="assistant-review" aria-live="polite">
           <div className="review-title">
@@ -437,6 +445,8 @@ function PreferenceAssistant({
             <span>{suggestion.source === 'ollama' ? 'Yerel model' : 'Bulut modeli'}: {suggestion.model}</span>
             <span>{suggestion.explanation}</span>
           </div>
+          <ConditionsEditor prefix="Önerilen " value={suggestion.conditions} onChange={conditions => onChangeSuggestion(current => ({ ...current, conditions }))} />
+          {suggestion.questions?.map(question => <StatusNotice key={question}>{question}</StatusNotice>)}
           <div className="review-fields">
             {[
               ['rating', 'Mekân puanı'],
@@ -631,11 +641,12 @@ function SelectionCriteriaPanel({
 
 function RecommendationCard({ item, selected, onSelect, manualCost, onManualCostChange }) {
   const breakdown = item.score_breakdown
-  const costLabel = item.candidate.manual_cost ?? item.candidate.price_level ?? 'Nötr'
+  const costLabel = item.candidate.manual_cost != null ? `${item.candidate.manual_cost} TL/kişi (girilen)` : item.candidate.price_level != null ? `seviye ${item.candidate.price_level}/4` : 'bilinmiyor - Nötr'
+  const ratingLabel = item.candidate.rating > 0 ? `${item.candidate.rating.toFixed(1)} puan` : 'Puan bilinmiyor'
   const costSource = costSourceLabel(item.cost_source)
   const cardLabel = [
     `#${item.rank} ${item.candidate.name}`,
-    `${item.candidate.rating.toFixed(1)} puan`,
+    ratingLabel,
     `ortalama ${item.t_avg_minutes.toFixed(1)} dakika`,
     `maksimum ${item.t_max_minutes.toFixed(1)} dakika`,
     `skor ${item.score.toFixed(3)}`,
@@ -653,13 +664,13 @@ function RecommendationCard({ item, selected, onSelect, manualCost, onManualCost
         <div className="card-copy">
           <div className="place-line">
             <h3>{item.candidate.name}</h3>
-            <span>{item.candidate.rating.toFixed(1)} puan</span>
+            <span>{ratingLabel}</span>
           </div>
           <p>{item.candidate.address}</p>
           <div className="metric-row">
             <span title={costSource}><DollarSign size={15} /> Fiyat {costLabel}</span>
             <span><Star size={15} /> Puan {breakdown.rating_norm.toFixed(2)}</span>
-            <span><Users size={15} /> Yakınlık {breakdown.proximity_norm.toFixed(2)}</span>
+            <span title="Kuş uçuşu mesafeye göre; yolculuk süresinden ayrıdır."><Users size={15} /> Yakınlık {breakdown.proximity_norm.toFixed(2)}</span>
             <span><Clock3 size={15} /> Ort. {item.t_avg_minutes.toFixed(1)} dk</span>
           </div>
         </div>
@@ -672,7 +683,7 @@ function RecommendationCard({ item, selected, onSelect, manualCost, onManualCost
           <span>Yakınlık etkisi {breakdown.proximity_component.toFixed(2)}</span>
         </div>
         <label className="manual-cost" onClick={(event) => event.stopPropagation()}>
-          Maliyet gir
+          Kişi başı maliyet (TL)
           <input
             type="number"
             min="0"
@@ -919,6 +930,10 @@ export default function App() {
   const [criterionWeights, setCriterionWeights] = useState(initialCriterionWeights)
   const [intentText, setIntentText] = useState('')
   const [intentSuggestion, setIntentSuggestion] = useState(null)
+  const [conditions, setConditions] = useState(emptyConditions)
+  const [contextMode, setContextMode] = useState('continue')
+  const [interpreting, setInterpreting] = useState(false)
+  const recommendationVersion = useRef(0)
   const [aiApplied, setAiApplied] = useState(false)
   const [priorityProfile, setPriorityProfile] = useState('balanced')
   const [lambdaValue, setLambdaValue] = useState(0.5)
@@ -931,6 +946,7 @@ export default function App() {
   const [focusUserId, setFocusUserId] = useState(ALL_DELTA_FOCUS_ID)
   const [focusMode, setFocusMode] = useState('delta_weighted_participants')
   const [manualCosts, setManualCosts] = useState({})
+  const [candidateOptions, setCandidateOptions] = useState([])
   const [k, setK] = useState(3)
   const [maxDuration, setMaxDuration] = useState('')
   const [minRating, setMinRating] = useState('')
@@ -941,6 +957,8 @@ export default function App() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [counts, setCounts] = useState({ candidates: 0, routes: 0 })
+  const [resultPreferenceKey, setResultPreferenceKey] = useState('')
+  const [scenarioExpiresAt, setScenarioExpiresAt] = useState(0)
 
   const recommendations = response?.recommendations || []
   const selected = recommendations.find((item) => item.candidate.id === selectedId) || recommendations[0]
@@ -965,6 +983,8 @@ export default function App() {
   ))
   const canResumeRoutes = Boolean(scenario && routeRecovery?.scenarioId === scenario.id && routeRecovery.context === searchContext)
 
+  useEffect(() => { setCandidateOptions([]) }, [scenario?.id, searchContext])
+
   useEffect(() => {
     if (scenarioContext !== null && scenarioContext !== searchContext) {
       setResponse(null)
@@ -979,7 +999,31 @@ export default function App() {
     refreshAiStatus()
   }, [])
 
-  const intentContextKey = JSON.stringify({ participantLocations, criterionWeights, minRating, maxDuration, intentText })
+  const intentContextKey = JSON.stringify({ participantLocations, criterionWeights, minRating, maxDuration, intentText, conditions, contextMode })
+  const currentIntentKey = useRef(intentContextKey)
+  currentIntentKey.current = intentContextKey
+  function preferenceKey(overrides = {}) {
+    return JSON.stringify({ weights: overrides.criterionWeights ?? criterionWeights,
+      people: overrides.participantWeights ?? Object.fromEntries(intentParticipants.map(person => [person.id, person.delta_weight])),
+      min: overrides.minRating ?? minRating, max: overrides.maxDuration ?? maxDuration, k, manualCosts,
+      conditions: overrides.conditions ?? conditions })
+  }
+  const activePreferenceKey = useRef('')
+  activePreferenceKey.current = preferenceKey()
+  useEffect(() => { setExperiment(null) }, [activePreferenceKey.current])
+  useEffect(() => {
+    if (!scenarioExpiresAt) return
+    const timer = setTimeout(() => {
+      intentVersion.current += 1; recommendationVersion.current += 1
+      setScenario(null); setScenarioContext(null); setResponse(null); setExperiment(null); setSelectedId(null)
+      setRouteRecovery(null); setParsedLocations([]); parsedLocationValues.current = ''
+      setParticipantLocations(makeParticipantRows(initialScenario.group_size)); setScenarioForm(initialScenario)
+      setIntentText(''); setIntentSuggestion(null); setConditions(emptyConditions()); setManualCosts({})
+      setCriterionWeights(initialCriterionWeights); setMinRating(''); setMaxDuration(''); setScenarioExpiresAt(0)
+      setCounts({ candidates: 0, routes: 0 }); setError('Oturum süresi doldu; konumlar ve sonuçlar temizlendi. Yeni bir buluşma oluşturabilirsiniz.')
+    }, Math.max(0, scenarioExpiresAt - Date.now()))
+    return () => clearTimeout(timer)
+  }, [scenarioExpiresAt])
   useEffect(() => {
     intentVersion.current += 1
     setIntentSuggestion(null)
@@ -1003,7 +1047,9 @@ export default function App() {
     return config
   }
 
-  function checkSearchCapacity(config) {
+  function checkSearchCapacity(config, activeConditions = conditions) {
+    const safe = checkedConditions(activeConditions)
+    if ((safe.budget_limit || safe.excluded_categories.length || safe.required_features.length) && !config.capabilities?.conditions_v1) throw new Error('Sunucu kesin koşulları henüz desteklemiyor; yeni arama başlatılmadı.')
     if (!config.production && health?.google_configured === false) return
     const capacity = config.google_search_capacity?.[inputMode === 'link' ? 'resolved_coordinates' : 'synthetic']?.[scenarioForm.group_size]
     if (!config.google_available || capacity?.available === false) {
@@ -1065,29 +1111,32 @@ export default function App() {
   }
 
   async function interpretIntent() {
+    if (interpreting) return
     const version = intentVersion.current
+    const key = intentContextKey
     setError('')
     setIntentSuggestion(null)
     try {
-      setBusy('interpret')
+      setInterpreting(true)
       const result = await api.interpretPreferences({
         text: intentText.trim(),
         participants: intentParticipants,
         criterion_weights: criterionWeights,
         min_rating: minRating === '' ? null : Number(minRating),
         max_duration_minutes: maxDuration === '' ? null : Number(maxDuration),
+        conditions, context_mode: contextMode, context_revision: String(version),
       })
-      if (version === intentVersion.current) setIntentSuggestion(result)
+      if (version === intentVersion.current && key === currentIntentKey.current) setIntentSuggestion(result)
     } catch (err) {
-      setError(err.message)
+      if (version === intentVersion.current && key === currentIntentKey.current) setError(err.message)
       refreshAiStatus()
     } finally {
-      setBusy('')
+      setInterpreting(false)
     }
   }
 
   async function applyIntentSuggestion(findPlaces = false) {
-    if (!intentSuggestion) return
+    if (!intentSuggestion || intentSuggestion.questions?.length) return
     const nextWeights = intentSuggestion.criterion_weights
     const nextPersonWeights = intentSuggestion.participant_proximity_weights
     const nextMinRating = intentSuggestion.min_rating ?? ''
@@ -1100,6 +1149,8 @@ export default function App() {
     setCriteriaProfile('custom')
     setMinRating(nextMinRating)
     setMaxDuration(nextMaxDuration)
+    setConditions(intentSuggestion.conditions || emptyConditions())
+    setContextMode('continue')
     setAiApplied(true)
     setIntentSuggestion(null)
     const overrides = {
@@ -1107,6 +1158,7 @@ export default function App() {
       participantWeights: nextPersonWeights,
       minRating: nextMinRating,
       maxDuration: nextMaxDuration,
+      conditions: intentSuggestion.conditions || emptyConditions(),
     }
     if (canReuseRoutes) {
       await refreshRecommendations(overrides)
@@ -1216,6 +1268,7 @@ export default function App() {
       max_duration_minutes: (overrides.maxDuration ?? maxDuration) === '' ? null : Number(overrides.maxDuration ?? maxDuration),
       min_rating: (overrides.minRating ?? minRating) === '' ? null : Number(overrides.minRating ?? minRating),
       category: scenarioForm.category,
+      conditions: overrides.conditions ?? conditions,
       ...preferencePayload(overrides),
       ...(await advancedPriorityPayload(activeScenario, overrides)),
     }
@@ -1247,8 +1300,10 @@ export default function App() {
     if ((!canStartSearch && !canResumeRoutes) || busy || pipelineInFlight.current) return
     setPlanNotice('')
     pipelineInFlight.current = true
+    const revision = ++recommendationVersion.current
+    const preferences = preferenceKey(overrides)
     const ensureUnchangedInputs = () => {
-      if (currentSearchContext.current !== searchContext) {
+      if (currentSearchContext.current !== searchContext || revision !== recommendationVersion.current) {
         throw new Error('Konumlar veya arama alanları değişti; işlem durduruldu. Güncel bilgilerle yeniden arayın.')
       }
     }
@@ -1263,14 +1318,16 @@ export default function App() {
       setBusy('scenario')
       const config = await refreshRuntimeConfig()
       if (!canResumeRoutes) {
-        checkSearchCapacity(config)
+        checkSearchCapacity(config, overrides.conditions ?? conditions)
         const payload = await buildScenarioPayload(overrides)
         ensureUnchangedInputs()
-        checkSearchCapacity(await refreshRuntimeConfig())
+        checkSearchCapacity(await refreshRuntimeConfig(), overrides.conditions ?? conditions)
         if (scenario?.session_only) await api.deleteScenario(scenario.id).catch(() => {})
         setRouteRecovery(null)
         setBusy('scenario')
         created = await api.createScenario(payload)
+        if (revision !== recommendationVersion.current) return
+        setScenarioExpiresAt(Date.now() + Math.min(config.session_ttl_seconds || 7200, 7200) * 1000)
         setScenario(created)
         setScenarioContext(searchContext)
         ensureUnchangedInputs()
@@ -1282,6 +1339,7 @@ export default function App() {
           radius_m: scenarioForm.radius_m,
         })
         setCounts((current) => ({ ...current, candidates: candidates.length }))
+        setCandidateOptions(candidates.map(({ id, name }) => ({ id, name })))
         if (!candidates.length) throw new Error('Bu bölgede uygun mekân bulunamadı. Arama bilgilerini değiştirebilirsiniz.')
       }
 
@@ -1295,7 +1353,9 @@ export default function App() {
       setBusy('recommend')
       const result = await api.recommend(await recommendationPayload(created.id, overrides, created))
       ensureUnchangedInputs()
+      if (revision !== recommendationVersion.current || preferences !== activePreferenceKey.current) throw new Error('Tercihler değişti. Rotalar korundu; güncel tercihlerle yeniden hesaplayın.')
       setResponse(result)
+      setResultPreferenceKey(preferences)
       setSelectedId(result.recommendations[0]?.candidate.id || null)
       setRouteRecovery(null)
     } catch (err) {
@@ -1310,33 +1370,41 @@ export default function App() {
 
   async function refreshRecommendations(overrides = {}) {
     if (!canReuseRoutes) return
+    const revision = ++recommendationVersion.current
+    const preferences = preferenceKey(overrides)
     setError('')
     try {
       setBusy('recommend')
       const result = await api.recommend(await recommendationPayload(scenario.id, overrides))
+      if (revision !== recommendationVersion.current || preferences !== activePreferenceKey.current) return
       if (currentSearchContext.current !== searchContext) {
         throw new Error('Konumlar veya arama alanları değişti; eski rotalarla sonuç gösterilmedi. Güncel bilgilerle yeniden arayın.')
       }
       setResponse(result)
+      setResultPreferenceKey(preferences)
       setSelectedId(result.recommendations[0]?.candidate.id || null)
     } catch (err) {
-      setError(err.message)
+      if (revision === recommendationVersion.current && preferences === activePreferenceKey.current) setError(err.message)
     } finally {
-      setBusy('')
+      if (revision === recommendationVersion.current) setBusy('')
     }
   }
 
   async function runExperiment() {
     if (!canReuseRoutes) return
+    const key = activePreferenceKey.current
     setError('')
     try {
       setBusy('experiment')
       const result = await api.runExperiment({
         scenario_id: scenario.id,
         k,
+        conditions, min_rating: minRating === '' ? null : Number(minRating),
+        max_duration_minutes: maxDuration === '' ? null : Number(maxDuration), category: scenarioForm.category,
         ...preferencePayload(),
         ...(await advancedPriorityPayload(scenario)),
       })
+      if (key !== activePreferenceKey.current) return
       setExperiment(result)
       setActiveTab('compare')
     } catch (err) {
@@ -1380,6 +1448,8 @@ export default function App() {
       setParsedLocations([])
       setParticipantLocations(makeParticipantRows(scenarioForm.group_size))
       setIntentText('')
+      setIntentSuggestion(null); intentVersion.current += 1; setScenarioExpiresAt(0)
+      setConditions(emptyConditions()); setManualCosts({})
       setError('')
     } catch (err) {
       setError(err.message)
@@ -1398,10 +1468,11 @@ export default function App() {
         catch (cause) { if (cause.status !== 404) throw cause }
       }
       setScenario(null); setScenarioContext(null); setResponse(null); setSelectedId(null)
-      setRouteRecovery(null); setExperiment(null); setCounts({ candidates: 0, routes: 0 })
+      setRouteRecovery(null); setExperiment(null); setCounts({ candidates: 0, routes: 0 }); setScenarioExpiresAt(0)
       setScenarioForm({ ...initialScenario, city: next.city, category: next.category, group_size: next.group_size })
       setInputMode('link'); setParticipantLocations(next.participants); setParsedLocations([]); parsedLocationValues.current = ''
       setCriterionWeights(next.weights); setCriteriaProfile(next.weights.cost === 60 ? 'cost' : 'balanced')
+      setConditions(next.conditions); setContextMode('continue'); intentVersion.current += 1
       setIntentText(''); setIntentSuggestion(null); setAiApplied(false); setMinRating(''); setMaxDuration(''); setManualCosts({})
       setAdvancedPriority(false); setUseAdjustedDurations(false); setParsedFocusLocation(null); setFocusLocationInput('')
       setFocusMode('delta_weighted_participants'); setFocusUserId(ALL_DELTA_FOCUS_ID); setError('')
@@ -1438,9 +1509,10 @@ export default function App() {
       <MeetingPlanner active={engine === 'plans'} maxParticipants={runtimeConfig?.max_participants || 8} available={health?.ai_ready === true}
         onTransfer={transferPlan} transferring={transferringPlan || Boolean(busy)} />
       <div hidden={engine !== 'places'} className="places-engine">
+      <WorkflowNav steps={[["place-input", "Kişiler ve konum"], ["place-preferences", "Tercihler"], ["place-results", "Sonuçlar"]]} current={response ? 2 : intentSuggestion ? 1 : 0} />
       <div className="planner-invitation"><span>Henüz bir mekân fikriniz yok mu?</span><button className="secondary" onClick={() => setEngine('plans')}><Sparkles size={17} />Buluşma planı oluştur</button></div>
       {planNotice && <p className="privacy-note" role="status">{planNotice}</p>}
-      <section className="control-band">
+      <section className="control-band" id="place-input" tabIndex={-1}>
         <h2 className="section-heading">Mekân bul</h2>
         <div className="control-grid simple-control-grid">
           <label>
@@ -1486,6 +1558,7 @@ export default function App() {
         <ProgressRail busy={busy} counts={counts} response={response} />
       </section>
 
+      <section id="place-preferences" tabIndex={-1} aria-label="Mekân tercihleri">
       <PreferenceAssistant
         health={health}
         checkingConnection={checkingAi}
@@ -1503,7 +1576,22 @@ export default function App() {
         googleConfigured={health?.google_configured === true}
         onDiscard={() => setIntentSuggestion(null)}
         busy={busy}
+        interpreting={interpreting}
+        contextMode={contextMode}
+        setContextMode={setContextMode}
       />
+      <details className="secondary-options"><summary>Kesin koşullar ve TL bütçesi</summary>
+        <ConditionsEditor value={conditions} onChange={setConditions} disabled={Boolean(busy)} />
+        {conditions.budget_limit && candidateOptions.length > 0 && <fieldset className="conditions-editor" disabled={Boolean(busy)}>
+          <legend>Adayların kişi başı maliyeti</legend>
+          <p>Google fiyat seviyesi TL tutarı değildir. Girdiğiniz tutarlar kullanıcı beyanıdır; gerçek fiyat doğrulaması sayılmaz.</p>
+          <div className="conditions-money">{candidateOptions.map(candidate => <label key={candidate.id}>{candidate.name} (TL/kişi)
+            <input aria-label={`${candidate.name} kişi başı TL`} type="number" min="0" max="10000000" placeholder="Bilinmiyor"
+              value={manualCosts[candidate.id] ?? ''} onChange={e => setManualCosts(current => ({ ...current, [candidate.id]: e.target.value }))} />
+          </label>)}</div>
+        </fieldset>}
+      </details>
+      <ConditionsSummary value={conditions} />
 
       <SelectionCriteriaPanel
         criteriaProfile={criteriaProfile}
@@ -1523,8 +1611,9 @@ export default function App() {
           <input type="number" min="1" step="1" placeholder="Sınır yok" value={maxDuration} onChange={(event) => setMaxDuration(event.target.value)} />
         </label>
       </div>
+      </section>
 
-      {error && <div className="error" role="alert">{error}</div>}
+      {error && <StatusNotice kind="error">{error}</StatusNotice>}
 
       <section className="summary-strip">
         <div><MapPin size={17} /> {scenario?.city || scenarioForm.city}</div>
@@ -1537,7 +1626,7 @@ export default function App() {
         <div><CheckCircle2 size={17} /> {response ? decisionModeLabel(response.decision_mode) : 'Profil hazır'}</div>
       </section>
 
-      <section className="result-layout">
+      <section className="result-layout" id="place-results" tabIndex={-1}>
         <div className="results-column">
           <div className="result-toolbar">
             <div>
@@ -1550,6 +1639,9 @@ export default function App() {
             </button>
           </div>
           <div className="recommendation-list">
+            {recommendations.some(item => item.candidate.provider !== 'google') && <StatusNotice>Yerel test verisi: mekânlar ve süreler gerçek Google sonuçları değildir.</StatusNotice>}
+            {response && resultPreferenceKey !== activePreferenceKey.current && <StatusNotice>Tercihler değişti. Gösterilen sonuçlar önceki hesaplamaya ait; Güncelle ile mevcut rotaları yeniden değerlendirin.</StatusNotice>}
+            {response?.warnings?.map(warning => <StatusNotice key={warning}>{warning}</StatusNotice>)}
             {recommendations.length ? (
               recommendations.map((item) => (
                 <RecommendationCard
@@ -1565,7 +1657,7 @@ export default function App() {
               <div className="empty-results">
                 <Route size={30} />
                 <strong>{response ? 'Kısıtlara uygun mekân bulunamadı' : 'Senaryo hazır'}</strong>
-                <span>{response ? 'Puan veya süre sınırını değiştirin.' : 'Öneri üretildiğinde mekân kartları burada listelenir.'}</span>
+                <span>{response ? 'Koşullarınız korundu. Fiyat veya zorunlu özellikler doğrulanamıyorsa uygunluk iddia edilmez.' : 'Henüz arama yapılmadı.'}</span>
               </div>
             )}
           </div>
@@ -1593,7 +1685,7 @@ export default function App() {
             <div className="model-view">
               <section>
                 <h3>Tercih sonucu</h3>
-                <p>{response ? `${profileLabel(criteriaProfile)} kriter profili uygulandı. Karar modu: ${decisionModeLabel(response.decision_mode)}.` : 'Öneri üretildiğinde kriter profili burada görünür.'}</p>
+                <p>{response ? `Bu sonuçların karar modu: ${decisionModeLabel(response.decision_mode)}. Aşağıdaki ağırlıklar sonuçla birlikte hesaplandı.` : 'Henüz sonuç yok.'}</p>
                 {(scenario?.input_mode || inputMode) === 'link' && <p className="source-note">Bu senaryo oturumluk tutulur; ham kişi linkleri ve rota metrikleri kalıcı veritabanına yazılmaz.</p>}
                 <CriterionBars weights={response?.criterion_weights} />
               </section>

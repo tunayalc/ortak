@@ -121,6 +121,7 @@ export function useMeeting() {
   };
 
   const remove = () => task('Buluşma siliniyor', async () => {
+    if (config?.capabilities?.group_invites_v1) await api.closeGroup();
     try { await session.clear(); }
     catch (cause) { if (!(cause instanceof ApiError && cause.status === 404)) throw cause; }
     clearMemory(); setNotice('Buluşma verileri temizlendi.');

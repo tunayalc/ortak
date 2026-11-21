@@ -96,6 +96,7 @@ export default function MeetingPlanner({ active, maxParticipants, available, onT
             </div>
             <ConditionsEditor prefix="Taslak " value={proposal.brief.conditions} onChange={conditions => setProposal(p => ({ ...p, brief: { ...p.brief, conditions } }))} />
             {proposal.questions?.map(q => <StatusNotice key={q}>{q}</StatusNotice>)}
+            {proposal.brief.indoor_backup && <p>Kapalı alan için B planı isteniyor.</p>}
             {proposal.warnings.map(w => <p key={w} className="source-note">{w}</p>)}
             <div className="action-row"><button className="secondary" disabled={disabled || Boolean(proposal.questions?.length)} onClick={() => {
               version.current += 1; setBrief(proposal.brief); setContextMode('continue')
@@ -117,6 +118,7 @@ export default function MeetingPlanner({ active, maxParticipants, available, onT
           </div>
           <fieldset className="planner-interests" disabled={disabled}><legend>İlgi alanları</legend>{planInterests.map(([id, label]) => <label key={id}><input type="checkbox" checked={brief.interests.includes(id)} onChange={() => update('interests', brief.interests.includes(id) ? brief.interests.filter(i => i !== id) : [...brief.interests, id])} />{label}</label>)}</fieldset>
           <ConditionsEditor value={brief.conditions} onChange={value => update('conditions', value)} disabled={disabled} />
+          <label className="planner-consent"><input type="checkbox" checked={!!brief.indoor_backup} disabled={disabled} onChange={e=>update('indoor_backup', e.target.checked)}/>Yağmur ihtimaline karşı kapalı alanda B planı ekle</label>
           <button className="primary" disabled={disabled} onClick={() => run('recommend')}><Sparkles size={18} />{busy === 'recommend' ? 'Planlar hazırlanıyor…' : 'Plan öner'}</button>
         </section>
       </div>
@@ -133,6 +135,10 @@ export default function MeetingPlanner({ active, maxParticipants, available, onT
             {plan.checks.map(check => <p className="source-note" key={check}>{check}</p>)}
           </div>
           <button className="primary" disabled={disabled} onClick={() => setPending(plan)}><ArrowRight size={17} />ORTAK’ta mekân bul</button>
+          {brief.indoor_backup && (result.backups?.[plan.id] ? <div className="planner-band"><strong>B planı: {result.backups[plan.id].title}</strong>
+            <p>{result.backups[plan.id].summary}</p><p>{plan.duration_minutes} dk, {plan.handoff.group_size} kişi. Bütçe koşulları korunur; fiyat ve müsaitlik doğrulanmamıştır.</p>
+            <button className="secondary" disabled={disabled} onClick={()=>setPending(result.backups[plan.id])}>B planı için mekân bul</button></div>
+          : <p>Koşullarınızı koruyan kapalı alan alternatifi bulunamadı.</p>)}
         </article>)}
         {result?.warnings.map(w => <p key={w} className="source-note">{w}</p>)}
       </section>

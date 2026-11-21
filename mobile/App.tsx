@@ -10,6 +10,8 @@ import { categories, destinationOnlyUrl, makeParticipants, normalizeWeights, pri
 import { dark, light } from './src/theme';
 import { useMeeting, type Meeting } from './src/useMeeting';
 import { MeetingPlanner } from './src/MeetingPlanner';
+import { PlaceComparison } from './src/PlaceComparison';
+import { GroupHost } from './src/GroupHost';
 import type { CriterionWeights, FeedbackReason, Recommendation } from './src/types';
 
 type Tab = 'Buluşma' | 'Tercihler' | 'Öneriler' | 'Gizlilik';
@@ -99,6 +101,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
           <View style={{ display: engine === 'Mekân bul' ? 'flex' : 'none' }}>
           {tab === 'Buluşma' && <>
             <Section><Label>Henüz bir mekân fikriniz yok mu?</Label><Button label="Buluşma planı oluştur" icon={Sparkles} tone="secondary" onPress={() => setEngine('Buluşma planı')} /></Section>
+            {m.config?.capabilities?.group_invites_v1 && <GroupHost m={m}/>}
             <Section><Heading>Mekân bul</Heading>
               <Field label="Şehir" value={m.input.city} maxLength={80} editable={!disabled && !m.hasScenario} onChangeText={city => m.setInput({ ...m.input, city })} />
               <Label>Mekân türü</Label><Segmented items={categories.map(c => c.label)} value={categories.find(c => c.id === m.input.category)!.label} disabled={disabled || m.hasScenario}
@@ -170,6 +173,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
             {m.resultsStale && m.results ? <Notice>Tercihler değişti; sonuçlar güncellenene kadar önceki sıralama gösteriliyor.</Notice> : null}
             {!m.results && <Label secondary>{m.hasScenario ? 'Arama henüz tamamlanmadı. Başarılı rotalar korunur; yeniden denemede eksikler tamamlanır.' : 'Henüz öneri yok.'}</Label>}
             {m.results && m.results.recommendations.length === 0 ? <Notice>Bu filtrelere uygun mekân bulunamadı. Tercihlerden puan veya süre sınırını değiştirebilirsiniz.</Notice> : null}
+            {m.results && <PlaceComparison key={m.results.scenario.id} items={m.results.recommendations} />}
             {m.results?.recommendations.map(result => <ResultCard key={result.candidate.id} result={result} isDark={isDark} openUrl={openUrl} onError={m.setError} />)}
             <SearchButton m={m} disabled={disabled || offline} onPress={() => void search()} />
             {m.hasScenario && <Button label="Buluşmayı sil" icon={Trash2} tone="danger" onPress={() => setConfirmDelete(true)} disabled={disabled} />}
@@ -189,7 +193,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Button label="Destek" tone="secondary" onPress={() => void openUrl('https://github.com/tunayalc/ortak/issues')} />
             </Section>
             <Section><Heading>Görünüm</Heading><Segmented items={['Sistem', 'Açık', 'Koyu']} value={appearance} onChange={setAppearance} /></Section>
-            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.1.0 - Built with Meta Llama 3</Label></Section>
+            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.2.0 - Built with Meta Llama 3</Label></Section>
           </>}
           </View>
         </ScrollView>

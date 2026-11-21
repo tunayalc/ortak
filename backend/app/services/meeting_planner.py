@@ -19,6 +19,7 @@ Interest = Literal["conversation", "nature", "culture", "food", "study", "creati
 
 
 class PlanBrief(PlanModel):
+    indoor_backup: bool = False
     city: str = Field(default="", max_length=80)
     area: str = Field(default="", max_length=100)
     group_size: Optional[int] = Field(default=None, ge=2, le=12)
@@ -91,6 +92,7 @@ class MeetingPlan(PlanModel):
 
 class PlanRecommendations(PlanModel):
     plans: list[MeetingPlan]
+    backups: dict[str, MeetingPlan] = Field(default_factory=dict)
     questions: list[str]
     warnings: list[str]
     source: Literal["activity_catalog"] = "activity_catalog"
@@ -157,7 +159,29 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
         ))
     if not plans:
         questions.append("Bu süre, ortam ve ilgi alanıyla eşleşen plan yok. Süreyi veya tercihlerinizi değiştirebilirsiniz.")
-    return PlanRecommendations(plans=plans, questions=questions, warnings=warnings)
+    backups = {}
+    if brief.indoor_backup:
+        for plan in plans:
+            alternatives = {
+                "nature": [("library", "Doğa rotası atölyesi", "Bir sonraki yürüyüşünüzün rotasını birlikte çizin."), ("cafe", "Gezi fotoğraflarıyla sohbet", "Birer gezi fotoğrafı seçip hikâyelerini paylaşın.")],
+                "creative": [("library", "Ortak hikâye atölyesi", "Sırayla kısa bölümler yazıp tek bir hikâye oluşturun.")],
+                "conversation": [("cafe", "Masa başında soru turu", "Herkes bir soru getirsin; sırayla birbirinizin sorularını yanıtlayın.")],
+                "study": [("library", "Akran çalışma oturumu", "Konuları paylaşın ve sırayla birbirinize anlatın.")],
+                "culture": [("library", "Okuma ve yorum buluşması", "Bir metin seçip farklı yorumları konuşun.")],
+                "food": [("restaurant", "Tarif paylaşım masası", "Yemek sırasında herkes sevdiği bir tarifi anlatsın.")],
+            }[plan.id]
+            for category, title, activity in alternatives:
+                if category in brief.conditions.excluded_categories:
+                    continue
+                backups[plan.id] = plan.model_copy(update={
+                    "id": "backup-" + plan.id, "title": title, "category": category, "summary": activity,
+                    "reason": "Kapalı alan alternatifi; kişi sayısı, süre ve bütçe koşulları değişmedi.",
+                    "steps": [plan.steps[0], PlanStep(title=activity, minutes=plan.steps[1].minutes), plan.steps[-1]],
+                    "checks": ["Kapalı alan, grup kapasitesi, ücret ve uygunluk mekânla doğrulanmalı; bu bir rezervasyon değildir."],
+                    "handoff": plan.handoff.model_copy(update={"category": category})
+                })
+                break
+    return PlanRecommendations(plans=plans, backups=backups, questions=questions, warnings=warnings)
 
 
 async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClient | None = None) -> PlanInterpretation:
@@ -169,6 +193,15 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
     reset = payload.context_mode == "new" or new_topic(payload.text)
     current = PlanBrief() if reset else payload.current
     source = folded(payload.text)
+    # A conditional alternative is not a change to the environment of the main plan.
+    backup_clause = re.compile(r"(?:yağmur yağarsa|hava bozarsa)\s*[,;:]?\s*kapalı(?: alanda)? (?:bir )?(?:alternatif|[bB] planı)(?: da| de)?(?: olsun| hazırla| öner)?", re.I)
+    main_text, wants_backup = backup_clause.subn("", payload.text)
+    if wants_backup:
+        current = current.model_copy(update={"indoor_backup": True})
+        source = folded(main_text)
+        if not source.strip(" ,.;!?"):
+            return PlanInterpretation(brief=current, model=settings.ollama_model, changed_fields=["indoor_backup"],
+                                      context_revision=payload.context_revision, warnings=["B planı isteği taslağa eklendi."])
     # A complete ordinal-only command is safe to resolve against the displayed list.
     ordinal = re.fullmatch(r"\s*(birinci|ikinci|ucuncu)(?:si|sini)?(?: olsun| sec)?[.!]?\s*", source)
     previous = re.fullmatch(r"\s*(?:bunu degil )?oncekini(?: sec| istiyorum)?[.!]?\s*", source)
@@ -185,6 +218,7 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
     # All extracted values remain a proposal: clients must show an editable review before use.
     schema = PlanBrief.model_json_schema()
     schema["properties"].pop("conditions")
+    schema["properties"].pop("indoor_backup")
     schema["required"] = list(schema["properties"])
     instructions = (
         "Extract a meeting brief from Turkish text. Return only the requested JSON. "
@@ -203,7 +237,7 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         "Walking is nature, NOT conversation. Eating is food, NOT conversation. "
         "Meeting friends alone does NOT imply conversation; absent activity means interests=[]. "
         "Do not output real events, venues, dates, opening hours or prices. Current brief: "
-        + current.model_dump_json(exclude={"conditions"})
+        + current.model_dump_json(exclude={"conditions", "indoor_backup"})
     )
     owns_client = client is None
     if owns_client:
@@ -211,14 +245,15 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
     try:
         response = await client.post(f"{settings.ollama_base_url.rstrip('/')}/api/chat", json={
             "model": settings.ollama_model, "messages": [{"role": "system", "content": instructions},
-                                                         {"role": "user", "content": payload.text}],
+                                                         {"role": "user", "content": main_text}],
             "format": schema, "stream": False, "options": {"temperature": 0, "num_predict": 600},
         })
         response.raise_for_status()
         raw = _read_ollama_output(response.json())
-        if set(raw) not in (set(PlanBrief.model_fields), set(PlanBrief.model_fields) - {"conditions"}):
+        if set(raw) - {"conditions", "indoor_backup"} != set(schema["required"]):
             raise ValueError("incomplete brief")
         brief = PlanBrief.model_validate(raw)
+        brief.indoor_backup = current.indoor_backup
         warnings = [
             "Yorumlanan bilgileri kontrol edin. Tarih, hava durumu, özel ihtiyaçlar ve gerçek fiyatlar bu aşamada doğrulanmaz."
         ]

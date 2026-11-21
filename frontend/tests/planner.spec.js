@@ -42,6 +42,21 @@ test('plan is independently usable; optional transfer does not launch paid searc
   await expect(page.locator('.plan-card')).toHaveCount(3)
 })
 
+test('B planı ayrı kalır; yalnız seçilen kapalı alan taslağı aktarılır', async ({ page }) => {
+  let calls=0
+  page.on('request', r=>{if(/\/(scenarios|candidates\/search|routes\/matrix)$/.test(r.url())) calls++})
+  await page.getByLabel('Plan şehri', {exact:true}).fill('Ankara')
+  await page.getByLabel('Kaç kişisiniz?', {exact:true}).fill('3')
+  await page.getByRole('checkbox',{name:'Doğa',exact:true}).check()
+  await page.getByRole('checkbox',{name:/Yağmur ihtimaline karşı/}).check()
+  await page.getByRole('button',{name:'Plan öner',exact:true}).click()
+  await expect(page.getByText('Parkta birlikte zaman',{exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'B planı için mekân bul'}).click()
+  await page.getByRole('button',{name:'Bilgileri aktar',exact:true}).click()
+  await expect(page.getByRole('combobox',{name:'Mekân türü'})).toHaveValue('library')
+  expect(calls).toBe(0)
+})
+
 test('Llama interpretation is a preview, not an automatic setting change', async ({ page }) => {
   await page.route('**/api/plans/interpret', route => route.fulfill({ json: { source: 'ollama', model: 'llama3:8b', warnings: [],
     brief: { city: 'İstanbul', area: 'Kadıköy', group_size: 5, duration_minutes: 90, budget: 'low', environment: 'indoor', pace: 'relaxed', interests: ['conversation'] } } }))

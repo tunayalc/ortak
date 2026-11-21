@@ -25,6 +25,27 @@ def test_missing_context_asks_instead_of_inventing():
     assert len(result.questions) == 2
 
 
+def test_opt_in_backup_keeps_constraints_without_searching():
+    args = dict(environment="outdoor", interests=["nature"], budget="low", duration_minutes=75,
+                conditions={"excluded_categories":["library"], "budget_limit":{"amount":600,"currency":"TRY","scope":"group"}})
+    assert not planner.recommend_plans(brief(**args)).backups
+    result = planner.recommend_plans(brief(indoor_backup=True, **args))
+    main, backup = result.plans[0], result.backups["nature"]
+    assert (main.category, backup.category) == ("park", "cafe")
+    assert backup.handoff.conditions == main.handoff.conditions
+    assert backup.handoff.group_size == 3 and backup.handoff.criterion_weights == main.handoff.criterion_weights
+    assert backup.duration_minutes == sum(x.minutes for x in backup.steps) == main.duration_minutes
+    args["conditions"]["excluded_categories"].append("cafe")
+    assert not planner.recommend_plans(brief(indoor_backup=True, **args)).backups
+
+
+def test_conditional_followup_does_not_replace_primary_environment(monkeypatch):
+    monkeypatch.setattr(planner, "get_settings", lambda: Settings(_env_file=None, LLM_PROVIDER="ollama", OLLAMA_MODEL="llama3:8b"))
+    current = brief(environment="outdoor", interests=["nature"])
+    parsed = asyncio.run(planner.interpret_plan(planner.PlanInterpretRequest(current=current, text="Yağmur yağarsa kapalı bir alternatif de olsun.")))
+    assert parsed.brief.indoor_backup and parsed.brief.environment == "outdoor" and parsed.brief.interests == ["nature"]
+
+
 def test_numbered_neighborhood_is_not_treated_as_a_precise_address():
     assert brief(area="100. Yıl").area == "100. Yıl"
 

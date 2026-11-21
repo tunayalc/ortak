@@ -39,6 +39,12 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  group: () => request('/groups/mine'),
+  createGroup: size => request('/groups', { method: 'POST', body: JSON.stringify({size}) }),
+  closeGroup: () => request('/groups/mine', { method: 'DELETE' }),
+  groupLocations: () => request('/groups/locations', { method: 'POST' }),
+  groupBallot: (scenario_id, candidates) => request('/groups/ballot', {method:'POST', body:JSON.stringify({scenario_id,candidates})}),
+  guest: body => request('/groups/guest', { method: 'POST', body: JSON.stringify(body) }),
   runtimeConfig: async () => {
     const config = await request('/runtime-config')
     csrfToken = config.csrf_token || ''

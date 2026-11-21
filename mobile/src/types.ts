@@ -15,7 +15,7 @@ export type Preferences = {
   conditions?: UserConditions;
 };
 export type RuntimeConfig = {
-  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean };
+  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean; group_invites_v1?: boolean };
   production: boolean;
   max_participants: number;
   max_candidates: number;
@@ -60,3 +60,4 @@ export type Suggestion = {
   conditions?: UserConditions; questions?: string[];
 };
 export type FeedbackReason = 'incorrect_preferences' | 'unsafe_response' | 'other';
+export type Group = { seats: { token:string; ready:boolean }[]; choices: { id:string; name:string; votes:number; provider:string; attributions:{provider:string}[] }[]; expires_in:number };

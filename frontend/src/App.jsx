@@ -26,6 +26,8 @@ import {
 import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import MeetingPlanner from './MeetingPlanner'
+import PlaceComparison from './PlaceComparison'
+import { GroupHost } from './GroupInvite'
 import { ConditionsEditor, ConditionsSummary, emptyConditions, StatusNotice, WorkflowNav } from './ui'
 import { checkedConditions, planSearchInput } from './planner'
 
@@ -1546,6 +1548,10 @@ export default function App() {
           onParse={handleParseLocations}
           busy={busy}
         />
+        {runtimeConfig?.capabilities?.group_invites_v1 && <GroupHost size={scenarioForm.group_size} result={response} disabled={Boolean(busy)} onImport={points => {
+          setInputMode('link'); updateForm('group_size',points.length); setParsedLocations([]); parsedLocationValues.current = ''
+          setParticipantLocations(makeParticipantRows(points.length).map((p,i) => ({...p,value:points[i].lat+','+points[i].lng})))
+        }} />}
         <div className="action-row">
           <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || (!canStartSearch && !canResumeRoutes)}>
             {busy ? <Loader2 size={18} className="spin" /> : <Play size={18} />}
@@ -1642,6 +1648,7 @@ export default function App() {
             {recommendations.some(item => item.candidate.provider !== 'google') && <StatusNotice>Yerel test verisi: mekânlar ve süreler gerçek Google sonuçları değildir.</StatusNotice>}
             {response && resultPreferenceKey !== activePreferenceKey.current && <StatusNotice>Tercihler değişti. Gösterilen sonuçlar önceki hesaplamaya ait; Güncelle ile mevcut rotaları yeniden değerlendirin.</StatusNotice>}
             {response?.warnings?.map(warning => <StatusNotice key={warning}>{warning}</StatusNotice>)}
+            <PlaceComparison key={response?.scenario?.id} items={recommendations} />
             {recommendations.length ? (
               recommendations.map((item) => (
                 <RecommendationCard

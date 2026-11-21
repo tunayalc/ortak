@@ -74,6 +74,7 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
         {proposal.warnings.map(w => <Label secondary key={w}>{w}</Label>)}
         {conditionLines(proposal.brief.conditions).map(line => <Notice key={line}>{line}</Notice>)}
         {proposal.questions?.map(question => <Notice key={question}>{question}</Notice>)}
+        {proposal.brief.indoor_backup && <Notice>Kapalı alan için B planı isteniyor.</Notice>}
         <Button label="Taslağı kullan" icon={Check} disabled={disabled || Boolean(proposal.questions?.length)} onPress={() => { setBrief(proposal.brief); if (proposal.selected_plan_id) setSelected(proposal.selected_plan_id); else setResult(null); setProposal(null); }} />
         <Button label="Vazgeç" tone="secondary" onPress={() => setProposal(null)} disabled={disabled} />
       </View>}
@@ -91,6 +92,7 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
       <Label>Tempo</Label><Segmented items={options.pace.map(([, label]) => label)} value={options.pace.find(([id]) => id === brief.pace)![1]} disabled={disabled} onChange={label => update({ pace: options.pace.find(([, name]) => name === label)![0] })} />
       <Label>İlgi alanları</Label>{interests.map(([id, label]) => <Consent key={id} label={label} checked={brief.interests.includes(id)} disabled={disabled}
         onChange={checked => update({ interests: checked ? [...brief.interests, id] : brief.interests.filter(i => i !== id) })} />)}
+      <Consent label="Yağmur ihtimaline karşı kapalı alanda B planı ekle" checked={!!brief.indoor_backup} disabled={disabled} onChange={indoor_backup=>update({indoor_backup})}/>
       <Button label="Plan öner" icon={Sparkles} loading={busy === 'recommend'} disabled={disabled} onPress={() => void run('recommend')} />
     </Section>
     <Section><Heading>Plan fikirleri</Heading>
@@ -102,6 +104,10 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
         <Button label={selected === plan.id ? 'Planı daralt' : 'Planı incele'} tone="secondary" onPress={() => setSelected(selected === plan.id ? '' : plan.id)} />
         {selected === plan.id && <View style={{ gap: 12 }}>{plan.steps.map(step => <Label key={step.title}>{step.title} - {step.minutes} dk</Label>)}{plan.checks.map(check => <Label secondary key={check}>{check}</Label>)}</View>}
         <Button label="ORTAK’ta mekân bul" icon={ArrowRight} disabled={disabled} onPress={() => setPending(plan)} />
+        {brief.indoor_backup && (result.backups?.[plan.id] ? <View style={{gap:8}}><Heading>B planı: {result.backups[plan.id]!.title}</Heading>
+          <Label>{result.backups[plan.id]!.summary}</Label><Label secondary>{plan.duration_minutes} dk, {plan.handoff.group_size} kişi. Bütçe koşulları korunur; fiyat ve müsaitlik doğrulanmamıştır.</Label>
+          <Button label="B planı için mekân bul" tone="secondary" disabled={disabled} onPress={()=>setPending(result.backups![plan.id]!)}/></View>
+          : <Label>Koşullarınızı koruyan kapalı alan alternatifi bulunamadı.</Label>)}
       </View>)}
       {result?.warnings.map(w => <Label secondary key={w}>{w}</Label>)}
       <Button label="Planı temizle" icon={Trash2} tone="secondary" disabled={disabled} onPress={clear} />

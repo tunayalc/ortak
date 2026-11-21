@@ -3,6 +3,7 @@ import { normalizeWeights, participantWeights } from './domain';
 import type { PlanBrief, PlanInterpretation, PlanResult } from './planner';
 import { conditionLines, validateConditions } from './conditions';
 import type { UserConditions } from './types';
+import type { Group } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -72,6 +73,11 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
   }
 
   return {
+    group: () => request<Group|null>('/groups/mine'),
+    createGroup: (size:number) => request<Group>('/groups', {size}),
+    closeGroup: () => request<void>('/groups/mine', undefined, 'DELETE'),
+    groupLocations: () => request<{lat:number;lng:number}[]>('/groups/locations', {}),
+    groupBallot: (scenario_id:string, candidates:string[]) => request<Group>('/groups/ballot',{scenario_id,candidates}),
     connect,
     expiresAt: () => expiresAt,
     forget: () => { token = ''; expiresAt = 0; },

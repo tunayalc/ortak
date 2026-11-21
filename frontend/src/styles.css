@@ -1497,3 +1497,9 @@ input[type='range'] {
   min-width: 0;
   width: 100%;
 }
+.group-actions, .guest-page { display: grid; gap: 1rem; min-width: 0; }
+.group-actions { border: 0; padding: 0; }
+.guest-page { margin: 2rem auto; width: min(92%, 36rem); }
+.comparison dl > div { display: flex; justify-content: space-between; gap: 1rem; padding: .5rem 0; border-bottom: 1px solid currentColor; }
+.comparison dd { margin: 0; }
+.planner-band summary { cursor: pointer; padding-block: .75rem; font-weight: 600; }

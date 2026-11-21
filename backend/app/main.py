@@ -39,6 +39,7 @@ from .services.preference_interpreter import PreferenceServiceError, interpret_p
 from .services.scenario import create_scenario, get_scenario
 from .services.scoring import recommend
 from .services import session_store
+from .services import group_invites
 from .services.google_prices import refresh_loop
 from .services.public_safety import PublicSafetyMiddleware
 from .services.mobile_session import ClientSessionMiddleware, issue_mobile_token
@@ -66,6 +67,7 @@ async def lifespan(app):
     async def cleanup():
         while True:
             session_store.cleanup_expired()
+            group_invites.cleanup()
             try:
                 await asyncio.to_thread(cleanup_feedback)
             except sqlite3.Error:
@@ -105,7 +107,7 @@ def runtime_config(request: Request):
     usage = usage_status()
     return {
         "production": settings.production,
-        "capabilities": {"conditions_v1": True, "plan_context_v1": True},
+        "capabilities": {"conditions_v1": True, "plan_context_v1": True, "group_invites_v1": True},
         "csrf_token": request.session.get("csrf", "") if settings.production else "",
         "max_participants": settings.public_max_participants if settings.production else 12,
         "max_candidates": settings.public_max_candidates if settings.production else 12,
@@ -210,9 +212,10 @@ def get_scenario_endpoint(scenario_id: str) -> Scenario:
 
 
 @router.delete("/scenarios/{scenario_id}", status_code=204)
-def delete_scenario_endpoint(scenario_id: str):
+async def delete_scenario_endpoint(scenario_id: str):
     if not session_store.delete_scenario(scenario_id):
         raise HTTPException(404, "Senaryo bulunamadı veya oturum süresi doldu.")
+    group_invites.forget_scenario(scenario_id)
 
 
 @router.post("/candidates/search", response_model=list[PlaceCandidate])
@@ -281,6 +284,7 @@ def create_app() -> FastAPI:
                           docs_url=None if settings.production else "/docs",
                           redoc_url=None if settings.production else "/redoc")
     application.include_router(router)
+    application.include_router(group_invites.router)
     application.include_router(mobile_feedback_router)
     application.middleware("http")(google_call_metadata)
     application.add_middleware(CORSMiddleware, allow_origins=settings.origins,

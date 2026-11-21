@@ -3,6 +3,7 @@ import { validateConditions } from './conditions';
 import type { Category, CriterionWeights, Preferences, SearchInput, UserConditions } from './types';
 
 export type PlanBrief = {
+  indoor_backup?: boolean;
   city: string; area: string; group_size: number | null; duration_minutes: number;
   budget: 'unspecified' | 'low' | 'flexible'; environment: 'any' | 'indoor' | 'outdoor';
   pace: 'relaxed' | 'active'; interests: string[];
@@ -11,7 +12,7 @@ export type PlanBrief = {
 export type PlanHandoff = { city: string; group_size: number; category: Category; criterion_weights: CriterionWeights; conditions?: UserConditions };
 export type MeetingPlan = { id: string; title: string; summary: string; reason: string; duration_minutes: number;
   steps: { title: string; minutes: number }[]; checks: string[]; handoff: PlanHandoff };
-export type PlanResult = { plans: MeetingPlan[]; questions: string[]; warnings: string[]; source: 'activity_catalog' };
+export type PlanResult = { plans: MeetingPlan[]; backups?: Record<string, MeetingPlan>; questions: string[]; warnings: string[]; source: 'activity_catalog' };
 export type PlanInterpretation = { brief: PlanBrief; source: 'ollama'; model: string; warnings: string[]; questions?: string[]; selected_plan_id?: string | null };
 export const emptyBrief: PlanBrief = { city: '', area: '', group_size: null, duration_minutes: 120, budget: 'unspecified', environment: 'any', pace: 'relaxed', interests: [] };
 export const interests = [['conversation', 'Sohbet'], ['nature', 'Doğa'], ['culture', 'Kültür'], ['food', 'Yemek'], ['study', 'Çalışma'], ['creative', 'Yaratıcılık']] as const;

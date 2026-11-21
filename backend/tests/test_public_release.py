@@ -64,6 +64,45 @@ def test_signed_secure_cookie_and_csrf(production):
         assert response.json()["session_only"] is True
 
 
+def test_group_privacy_votes_expiration_and_revocation(production, monkeypatch):
+    from app.services import group_invites
+    from app.schemas import PlaceCandidate, RouteMetric
+    with client(production) as host, client(production) as guest:
+        hh, gh = headers(host), headers(guest)
+        assert host.post("/groups", json={"size":2}).status_code == 403
+        seats = host.post("/groups", headers=hh, json={"size":2}).json()["seats"]
+        def act(index, action="view", **kwargs):
+            return guest.post("/groups/guest", headers=gh, json={"token":seats[index]["token"],"action":action,**kwargs})
+        assert guest.get("/groups/mine").json() is None
+        assert guest.post("/groups/locations", headers=gh).status_code == 404
+        assert host.post("/groups/locations", headers=hh).status_code == 409
+        points = [{"lat":39.92, "lng":32.85},{"lat":39.93, "lng":32.86}]
+        assert act(0,"locate",location=points[0]).status_code == 422
+        for i,p in enumerate(points):
+            r = act(i, "locate", location=p, consent=True)
+            assert set(r.json()) == {"seat","choices","ready","vote"} and r.headers["x-ortak-google-calls"] == "0"
+        assert host.post("/groups/locations",headers=hh).json() == points
+        scenario = host.post("/scenarios",json=scenario_body(),headers=hh).json()
+        sid = scenario["id"]
+        candidates = [PlaceCandidate(id=k,scenario_id=sid,place_id=k,name=k,address="test",category="cafe",rating=4,review_count=2,lat=39,lng=32,provider="google") for k in ["p1","p2"]]
+        bundle = session_store._SESSION_SCENARIOS[sid]
+        bundle.candidates = candidates
+        ballot = {"scenario_id":sid,"candidates":["p1","p2"]}
+        assert host.post("/groups/ballot",headers=hh,json=ballot).status_code == 422
+        bundle.routes = [RouteMetric(id=c.id+u["id"],scenario_id=sid,user_id=u["id"],candidate_id=c.id,duration_seconds=120,distance_meters=200,provider="google") for c in candidates for u in scenario["users"]]
+        assert host.post("/groups/ballot",headers=hh,json=ballot).status_code == 200
+        assert act(0,"locate",location=points[0],consent=True).status_code == 409
+        assert act(0,"vote",candidate_id="p1").json()["choices"][0]["votes"] == 1
+        assert [c["votes"] for c in act(0,"vote",candidate_id="p2").json()["choices"]] == [0,1]
+        assert act(1).json()["vote"] is None
+        assert not act(0,"withdraw").json()["ready"] and not act(1).json()["choices"]
+        assert host.delete("/groups/mine",headers=hh).status_code == 204 and act(0).status_code == 404
+        seats = host.post("/groups",headers=hh,json={"size":2}).json()["seats"]
+        now = group_invites.monotonic()
+        monkeypatch.setattr(group_invites, "monotonic", lambda: now + 7201)
+        assert act(0).status_code == 404 and host.get("/groups/mine").json() is None
+
+
 def test_planner_shares_csrf_and_llm_rate_limits_without_google_calls(production):
     from app.services.public_safety import reserve_rate_limits
     with client(production) as browser:

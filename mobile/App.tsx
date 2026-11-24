@@ -203,7 +203,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Button label="Destek" tone="secondary" onPress={() => void openUrl('https://github.com/tunayalc/ortak/issues')} />
             </Section>
             <Section><Heading>Görünüm</Heading><Segmented items={['Sistem', 'Açık', 'Koyu']} value={appearance} onChange={setAppearance} /></Section>
-            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.2.0 - Built with Meta Llama 3</Label></Section>
+            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.3.0 - Built with Meta Llama 3</Label></Section>
           </>}
           </View>
         </ScrollView>

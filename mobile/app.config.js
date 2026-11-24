@@ -2,13 +2,13 @@ module.exports = {
   expo: {
     name: 'ORTAK',
     slug: 'ortak-mobile',
-    version: '0.2.0',
+    version: '0.3.0',
     scheme: 'ortak',
     userInterfaceStyle: 'automatic',
     icon: './assets/icon.png',
     ios: {
       bundleIdentifier: 'com.tunayalc.ortak',
-      buildNumber: '2',
+      buildNumber: '3',
       supportsTablet: true,
       infoPlist: {
         CFBundleDevelopmentRegion: 'tr',
@@ -35,7 +35,7 @@ module.exports = {
     },
     android: {
       package: 'com.tunayalc.ortak',
-      versionCode: 2,
+      versionCode: 3,
       allowBackup: false,
       adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#232427', monochromeImage: './assets/monochrome-icon.png' },
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],

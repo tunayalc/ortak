@@ -1508,12 +1508,12 @@ input[type='range'] {
 .consent-scroll { max-height: 55vh; overflow-y: auto; border: 1px solid var(--border); padding: 12px 16px; background: var(--surface-low); }
 .consent-scroll h2 { display: flex; align-items: center; gap: 8px; font-size: 1rem; margin: 16px 0 4px; }
 .consent-scroll ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
-.consent-check { display: flex; gap: 12px; align-items: flex-start; min-height: 44px; }
-.consent-check input { margin-top: 4px; }
+.consent-check { display: flex; gap: 12px; align-items: flex-start; min-height: 44px; color: var(--text); font-size: 14px; }
+.consent-check input, .venue-picker input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; padding: 0; margin: 2px 0 0; flex-shrink: 0; accent-color: var(--focus-ring); }
 .venue-picker { border: 1px solid var(--border); padding: 8px 12px; margin: 12px 0 0; }
 .venue-picker summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
 .venue-picker fieldset { border: 0; padding: 0; margin: 8px 0; }
 .venue-picker legend { font-weight: 600; color: var(--secondary); }
 .venue-picker .chips { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.venue-picker .chips label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.venue-picker .chips label { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--text); font-size: 14px; }
 .transport-select { max-width: 14rem; }

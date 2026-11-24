@@ -1,6 +1,6 @@
 # ORTAK Mobil: Yayın ve Uyumluluk Kontrolü
 
-Kontrol tarihi: 12 Kasım 2026. Bu belge teslim kontrolüdür; mağaza onayı veya
+Kontrol tarihi: 25 Kasım 2026. Bu belge teslim kontrolüdür; mağaza onayı veya
 hukuki uygunluk garantisi değildir. Kurallar başvuru gününde yeniden kontrol edilir.
 
 ## Tamamlanan İlk Dilim
@@ -19,20 +19,28 @@ hukuki uygunluk garantisi değildir. Kurallar başvuru gününde yeniden kontrol
 
 | Durum | İş | Kanıt / Kabul |
 |---|---|---|
-| Bekliyor | Mobil API'nin Oracle'a kontrollü yüklenmesi | `/mobile/session`, `/mobile/feedback`, mevcut web regresyonu; eski imaja geri dönüş |
-| Bekliyor | Mobil gizlilik sayfasının yayımlanması | `mobile-privacy.html` ve `mobile-terms.html` herkese açık HTTPS 200 |
-| Bekliyor | Apple Developer ve Play Console sahipliği | Kullanıcının kimlik/kurum doğrulaması, imzalama; ücretli kayıt otomatik yapılmaz |
-| Bekliyor | EAS projesi veya yerel derleme ortamı | Apple takım/provisioning, Android upload key; hiçbir anahtar Git'e girmez |
+| Kısmen doğrulandı | Mobil API'nin Oracle'a kontrollü yüklenmesi | `51b1934` canlı; `/runtime-config` mekân türü ve kişi bazlı ulaşım yeteneklerini bildiriyor. Gerçek cihazdan bildirim ve öneri akışı bekliyor |
+| Tamamlandı | Mobil gizlilik ve kullanım koşulları | `https://ortak.web.tr/mobile-privacy.html` ve `https://ortak.web.tr/mobile-terms.html` herkese açık HTTPS 200 |
+| Kısmen doğrulandı | Apple Developer ve Play Console doğrulamaları | Apple Developer aktif, `com.tunayalc.ortak` kayıtlı. Play kimlik onaylı; gerçek Android cihaz ve telefon doğrulamaları bekliyor, uygulama oluşturma kapalı |
+| Tamamlandı | Mağaza imzalama | Android yükleme anahtarı ve Apple Distribution özel anahtarı yerelde. iOS `0.3.0 (3)` Xcode'daki hesapla otomatik imzalandı (Xcode yönetimli App Store profili). Android `0.3.0 (3)` imzasız AAB hazır; `output/mobile/next-0.3.0/sign-aab.sh` şifreyi Terminal'de sorarak yükleme anahtarıyla imzalar |
 | Bekliyor | Gerçek iPhone, iPad, Android testleri | İzin verilmesi/reddi, yaklaşık konum, ayarlar dönüşü, süreç sonlandırma, TTL, paylaşım, ekran okuyucu, büyük yazı, rotasyon |
-| Bekliyor | Yerel ikili paket doğrulaması | İmzalı IPA/AAB; 16 KB Android testi, native crash, nihai izin listesi ve Privacy Report |
+| Tamamlandı | iOS simülatör açılışı | iPhone 18 Pro ve iPad Pro 13 inç (M5) üzerinde `0.1.0 (1)` açıldı. `output/mobile/app-store/` altındaki iki görsel App Store Connect'e yüklendi |
+| Tamamlandı | Android yerel açılış ve ana akış | API 36 ARM64 emülatörde dağıtım AAB'sinden üretilen test APK'sı açıldı. İki motorun ekranları yakalandı. Canlı mobil API'de oturum, Google arama kapasitesi ve ücretsiz plan isteği doğrulandı; bu mobil kontrolde Google çağrısı yapılmadı |
+| Tamamlandı | Yerel paket imza doğrulaması | Android AAB `bundletool` doğrulamasından geçti; API 36 ve 16 KB hizalama korundu. iOS `0.1.0 (1)` App Store IPA'sında `codesign --verify --deep --strict` ve paket kimliği doğrulandı |
 | Bekliyor | Gerçek mobil uçtan uca kabul | Cihazda Llama önizleme/onay ve tam Google matrisi; kayıtlı harcama onayı/kota korunarak ayrı test |
-| Bekliyor | Mağaza metaverileri | Gerçek ekran görüntüleri, destek iletişimi, yaş derecelendirme, hedef kitle, veri beyanları, erişim yönergeleri |
+| Kısmen tamamlandı | Mağaza metaverileri | Apple metinleri, `13+` yaş derecelendirmesi, gizlilik, içerik hakları ve görseller kayıtlı. Play metni, ikon, tanıtım görseli ve iki güncel Android ekranı `output/mobile/google-play/` altında; yükleme hesap doğrulamasını bekliyor |
 | Hesaba bağlı | Google kapalı test | Yeni kişisel hesaplarda en az 12 testçi, kesintisiz 14 günlük katılım; ardından üretim erişimi başvurusu [1] |
-| Bekliyor | TestFlight ve mağaza incelemesi | İnsan incelemesi; bu kodun derlenmesi tek başına kabul anlamına gelmez |
+| Yayında / incelemede | App Store | iOS `0.1.0 (1)` 23 Kasım 2026'dan beri Türkiye App Store'da yayında. `0.3.0 (3)` 25 Kasım'da incelemeye gönderildi (`Waiting for Review`), onay sonrası otomatik yayınlanır. TestFlight'ta `ORTAK iPhone QA` iç grubunda. Hazır React Native çatılarının dSYM uyarısı için `mobile/scripts/add-prebuilt-dsyms.sh` eklendi; `0.3.0` arşivinde semboller yerelde tamam |
 
-Canlı web sitesinin erişilebilir olması mobil uçların yüklendiği veya mağaza
-sürümünün hazır olduğu anlamına gelmez. Bu turda üretim yapılandırması, harcama
-sınırları ve canlı veritabanı değiştirilmedi. Silinmiş otomasyon geri kurulmadı.
+Yayımlama paketleri `output/mobile/` altında ve Git dışında tutulur.
+`ortak-android-0.1.0-upload-ready.aab` yükleme anahtarıyla imzalıdır.
+`ORTAK-iOS-0.1.0-1.ipa` imzalı App Store paketidir.
+`ORTAK-0.1.0-unsigned.xcarchive` kaynak Xcode arşividir.
+`output/mobile/ios-0.3.0-3/` iOS `0.3.0 (3)` arşivini ve IPA'sını, `output/mobile/next-0.3.0/` Android `0.3.0 (3)` paketini içerir.
+Android paketi yüklenmedi. Canlı web ve mobil API
+doğrulamaları mağaza yayını veya fiziksel cihaz kabulü yerine geçmez. Satıcı beyanı ekranı
+geliştirici e-postasının, yasal ad ve adresin ve geliştirici telefonunun herkese
+açık gösterileceğini bildirir; hesap sahibinin bu alanları incelemesi gerekir.
 
 ## Veri Envanteri ve Beyan Taslağı
 

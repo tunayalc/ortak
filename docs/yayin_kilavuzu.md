@@ -2,6 +2,22 @@
 
 ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışan kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi tek başına sunucu kabulü değildir; aşağıdaki kayıtlar gerçek sunucu kanıtlarını ayrı gösterir.
 
+## 24 Kasım 2026: Etkinlik Türleri, Kişi Bazlı Ulaşım ve İlk Açılış Onayı
+
+- Web ve API Oracle'da `51b1934` sürümüne alındı (API `sha256:a574dc37…`, web `sha256:42220546…`). Önceki imajlar geri dönüş için sunucuda tutuldu; yayın betiği `.env`, kurulum planı ve sürüm kayıtlarını yedekledi, Google kullanım kaydı korundu. Ollama değişmedi.
+- Yeni özellikler: 44 gruplu mekân/etkinlik türü (aramada en fazla 5, sonuçlar türler arasında dengeli), kişi başına araç/toplu taşıma/yürüme/bisiklet, birlikte hareket eden kriter kaydırıcıları, web ve mobilde ilk açılış veri işleme onayı.
+- Canlı kabul (`ortak.web.tr`, kurgusal koordinatlar): onaydan önce arama isteği gitmedi; Kafe + Bowling ve bir kişi toplu taşıma ile tek arama 3 gerçek Google mekânı ve 6 rota döndürdü. Kişi bazlı süreler ve ulaşım biçimleri gösterildi, kaydırıcılar 46/10/44 oldu, test senaryosu silindi. Çağrılar: 1 Places, 6 Routes; geocoding yok.
+- Yayın için Oracle güvenlik listesine yalnızca yönetici IP'sine `/32` geçici SSH kuralı eklendi ve yayından sonra silindi; dışarıdan SSH'nin kapandığı doğrulandı. Kalıcı SSH kuralı, Google kullanım sınırları ve harcama ayarları değiştirilmedi.
+- Vercel geri dönüş dağıtımı güncellenmedi; ana yayın Oracle'dadır. Mobil mağaza paketleri bu yayının parçası değildir.
+
+## 20 Kasım 2026: Ana Web Yayını Oracle'da
+
+- `ortak.web.tr` ve `www.ortak.web.tr` A kayıtları Oracle'a yönlenir. Caddy iki adresin HTTPS sertifikasını yönetir ve `www` ana adrese 308 döner. Web'in `/api` istekleri aynı Oracle sunucusunda kalır. Daha önceki mobil HTTPS API adresi çalışmaya devam eder.
+- Web sürümü `f0bad45`, API sürümü `0366b17`. DNS değişikliğinden önce Oracle IP'sine doğrudan bağlanan tarayıcıda geçerli TLS, mobil gizlilik ve kullanım koşulları, gerçek Llama planı ve isteğe bağlı aktarım doğrulandı. Tek Maps aramasında 3 mekân ve 9 rota döndü; 10 API çağrısı yapıldı, test senaryosu silindi. Aktarım Google çağrısı yapmadı.
+- DNS değişikliğinden sonra iki yetkili DNS sunucusu ve iki genel çözümleyici Oracle'ı gösterdi. Yeni DNS çözümüyle ana sayfa, yasal sayfalar, API ve ücretsiz plan isteği tekrar geçti. Önceki 3600 saniyelik DNS önbelleği nedeniyle Vercel dağıtımı geri dönüş için açık bırakıldı; ana yayının Vercel'e bağımlılığı yoktur.
+- Geçici SSH kuralı ve sertifika TXT kayıtları kaldırıldı. Kalıcı SSH, API anahtarı, Google kullanım sınırları, Oracle API ve Ollama yapılandırması değiştirilmedi. Mobil mağaza yayını bu web kabulünün parçası değildir.
+- Aynı gün ana alan adındaki canlı yayın kabulü 25/25 geçti. Gerçek Llama yanıtı 66,053 saniye sürdü. Üç Google mekânı ve dokuz rota için 10 Google isteği yapıldı, yeniden deneme olmadı. Ağırlık ve filtre değişiklikleri ek istek doğurmadı, test senaryosu silindi. Harcama ayarları değiştirilmedi. Özel kayıt: `output/deployment/release-readiness-20261120/run.json`.
+
 ## 13 Kasım 2026: Vercel Korundu, Ana Adres Birleştirildi
 
 - Kullanıcının son tercihiyle Vercel'den Oracle'a arayüz taşıma işlemi iptal edildi. Arayüz Vercel'de; API, kalıcı kullanım kaydı ve Ollama Oracle'da kalır. Gateway istek bazlı HTTPS vekilidir; kişisel bilgisayarda açık tutulması gereken bir tünel yoktur.

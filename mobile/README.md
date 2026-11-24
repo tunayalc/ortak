@@ -79,6 +79,13 @@ Yetkili işletmeci bunları haftalık incelemeli; bu akış kendiliğinden e-pos
 ve Llama doğrulaması değildir. Ekran görüntüleri `output/playwright/` altındadır.
 Kişisel içerik, token ve canlı Google yanıtı test raporuna alınmamalıdır.
 
+iOS arşivi alındıktan sonra, dışa aktarma veya yüklemeden önce
+`scripts/add-prebuilt-dsyms.sh <arşiv>.xcarchive` çalıştırılır. Betik React,
+ReactNativeDependencies ve Hermes hazır çatılarının sembollerini Maven Central'dan
+SHA-1 doğrulamasıyla indirir, UUID'ler arşivdeki ikili dosyalarla tutmazsa hiçbir şey
+eklemez. Böylece yüklemedeki "Upload Symbols Failed" uyarısı çıkmaz ve çökme
+raporları bu çatılarda da okunur.
+
 `eas.json` içindeki preview APK, iOS simulator ve production AAB/IPA profilleri
 hazırdır. EAS projesi, Apple/Google mağaza hesabı ve imza anahtarları henüz
 bağlanmadı. Otomatik mağaza gönderimi yoktur; EAS kullanımı veya mağaza üyeliği

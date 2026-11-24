@@ -1,7 +1,8 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 
 export const emptyConditions = () => ({ budget_limit: null, excluded_categories: [], required_features: [] })
-export const categoryNames = { cafe: 'Kafe', restaurant: 'Restoran', park: 'Park', museum: 'Müze', library: 'Kütüphane' }
+import { categoryNames } from './catalog'
+export { categoryNames }
 const featureNames = { quiet: 'Sessizlik', accessible: 'Erişilebilirlik', alcohol_free: 'Alkolsüz mekân' }
 
 export function StatusNotice({ kind = 'info', children }) {

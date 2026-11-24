@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
+import { acceptConsent } from './helpers.js'
 
 test.beforeEach(async ({ page }) => {
+  await acceptConsent(page)
   await page.route('**/api/health', route => route.fulfill({ json: { ai_ready: true, ai_model: 'llama3:8b', google_configured: false } }))
   await page.goto('/')
   await page.getByRole('button', { name: 'Buluşma planı oluştur', exact: true }).click()
@@ -53,7 +55,7 @@ test('B planı ayrı kalır; yalnız seçilen kapalı alan taslağı aktarılır
   await expect(page.getByText('Parkta birlikte zaman',{exact:true})).toBeVisible()
   await page.getByRole('button',{name:'B planı için mekân bul'}).click()
   await page.getByRole('button',{name:'Bilgileri aktar',exact:true}).click()
-  await expect(page.getByRole('combobox',{name:'Mekân türü'})).toHaveValue('library')
+  await expect(page.locator('.venue-picker summary')).toContainText('Kütüphane')
   expect(calls).toBe(0)
 })
 

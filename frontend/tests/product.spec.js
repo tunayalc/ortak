@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { acceptConsent } from './helpers.js'
 
 const runtime = { production: true, csrf_token: '', max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: true, google_remaining_requests: 33, capabilities: { conditions_v1: true, plan_context_v1: true } }
 
@@ -22,6 +23,7 @@ async function enterLocations(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await acceptConsent(page)
   await page.route('**/api/runtime-config', (route) => route.fulfill({ json: runtime }))
   await page.route('**/api/health', (route) => route.fulfill({ json: { status: 'ok', google_configured: false, ai_provider: 'ollama', ai_model: 'llama3:8b', ai_ready: true, ai_status: 'ready' } }))
   await page.goto('/')
@@ -43,9 +45,9 @@ test('form, kişi sayısı, delta ve dengeli kişiler', async ({ page }) => {
 test('ana form klavye odağını şehirden mekân türüne taşır', async ({ page }) => {
   await page.getByLabel('Şehir', { exact: true }).focus()
   await page.keyboard.press('Tab')
-  await expect(page.getByLabel('Mekân türü')).toBeFocused()
-  await page.keyboard.press('Tab')
   await expect(page.getByLabel('Grup', { exact: true })).toBeFocused()
+  await page.locator('.venue-picker summary').focus()
+  await expect(page.locator('.venue-picker summary')).toBeFocused()
 })
 
 test('hatalı bağlantı öneri akışını durdurur', async ({ page }) => {
@@ -221,7 +223,7 @@ test('açık ve koyu tema, klavye, taşma', async ({ page }, testInfo) => {
   }
   await page.getByLabel('Şehir', { exact: true }).focus()
   await page.keyboard.press('Tab')
-  await expect(page.getByLabel('Mekân türü')).toBeFocused()
+  await expect(page.getByLabel('Grup', { exact: true })).toBeFocused()
 })
 
 test('doğrulanan linkler koordinat olarak aktarılır ve delta değişince yeniden çözülmez', async ({ page }) => {
@@ -292,4 +294,73 @@ test('kesilen rota adımı aynı senaryoyla sürer; aday araması tekrarlanmaz',
   expect(scenarios).toBe(1)
   expect(candidates).toBe(1)
   expect(ids[0]).toBe(ids[1])
+})
+
+test('birden fazla mekân türü seçilir, en fazla beşte durur ve istekte hepsi gider', async ({ page }) => {
+  let body
+  await page.route('**/api/scenarios', async route => { body = route.request().postDataJSON(); await route.abort() })
+  await page.locator('.venue-picker summary').click()
+  for (const name of ['Paintball ve macera sporları', 'Bowling', 'Sinema', 'Karaoke']) await page.getByRole('checkbox', { name, exact: true }).check()
+  await expect(page.locator('.venue-picker summary')).toContainText('(5/5)')
+  await expect(page.getByRole('checkbox', { name: 'Spa ve hamam', exact: true })).toBeDisabled()
+  await page.getByRole('checkbox', { name: 'Kafe', exact: true }).uncheck()
+  await expect(page.getByRole('checkbox', { name: 'Spa ve hamam', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect.poll(() => body?.categories).toEqual(['paintball', 'bowling', 'cinema', 'karaoke'])
+  expect(body.category).toBe('paintball')
+})
+
+test('her kişi kendi ulaşım biçimini seçer ve istekte kişiye göre gider', async ({ page }) => {
+  let body
+  await page.route('**/api/locations/parse', route => route.fulfill({ json: [
+    { label: 'Katılımcı 1', lat: 39.92, lng: 32.85, source: 'coordinate', location_input_type: 'coordinate', delta_weight: 1 },
+    { label: 'Katılımcı 2', lat: 39.93, lng: 32.86, source: 'coordinate', location_input_type: 'coordinate', delta_weight: 1 },
+    { label: 'Katılımcı 3', lat: 39.94, lng: 32.87, source: 'coordinate', location_input_type: 'coordinate', delta_weight: 1 }] }))
+  await page.route('**/api/scenarios', async route => { body = route.request().postDataJSON(); await route.abort() })
+  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
+  const fields = page.getByLabel('Link veya koordinat', { exact: true })
+  await fields.nth(0).fill('39.92,32.85'); await fields.nth(1).fill('39.93,32.86'); await fields.nth(2).fill('39.94,32.87')
+  await page.locator('.participant-row .transport-select select').first().selectOption('transit')
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect.poll(() => body?.participant_locations?.map(p => p.travel_mode)).toEqual(['transit', null, null])
+  expect(body.travel_mode).toBe('driving')
+})
+
+test('bir kriter değişince diğer çubuklar da hareket eder ve toplam 100 kalır', async ({ page }) => {
+  const sliders = page.locator('.criteria-sliders input[type=range]')
+  await sliders.nth(1).fill('10')
+  const values = await sliders.evaluateAll(items => items.map(item => Number(item.value)))
+  expect(values[1]).toBe(10)
+  expect(values.reduce((a, b) => a + b, 0)).toBe(100)
+  expect(values[0]).toBeGreaterThan(34)
+  expect(values[2]).toBeGreaterThan(33)
+})
+
+test('ilk açılışta veri işleme onayı istenir; onay olmadan uygulama açılmaz', async ({ browser }) => {
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: "ORTAK'a hoş geldiniz" })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Yapay zekâ (Meta Llama 3)' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Google Maps hizmetleri' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Öneri üret', exact: true })).toHaveCount(0)
+  const accept = page.getByRole('button', { name: 'Kabul et ve devam et' })
+  await expect(accept).toBeDisabled()
+  await page.getByRole('button', { name: 'Kabul etmiyorum' }).click()
+  await expect(page.getByText('Onay vermeden ORTAK kullanılamaz')).toBeVisible()
+  await page.getByRole('checkbox').check()
+  await accept.click()
+  await expect(page.getByRole('heading', { name: 'Mekân bul', level: 2 })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: "ORTAK'a hoş geldiniz" })).toHaveCount(0)
+  await context.close()
+})
+
+test('bir kişinin ulaşımı için rota yoksa hangi kişi olduğu söylenir ve aynı rota tekrar istenmez', async ({ page }) => {
+  await page.route('**/api/scenarios', route => route.fulfill({ json: { id: 's-422', city: 'Ankara', category: 'cafe', categories: ['cafe'], group_size: 3, travel_mode: 'transit', radius_m: 2500, seed: 42, session_only: true, input_mode: 'synthetic', users: [1, 2, 3].map(i => ({ id: `user-${i}`, label: `Katılımcı ${i}`, lat: 39.9, lng: 32.8 })) } }))
+  await page.route('**/api/candidates/search', route => route.fulfill({ json: [{ id: 'p1', scenario_id: 's-422', place_id: 'g1', name: 'Test Kafe', address: '', category: 'cafe', rating: 4, review_count: 1, lat: 39.9, lng: 32.8, provider: 'google' }] }))
+  await page.route('**/api/routes/matrix', route => route.fulfill({ status: 422, json: { detail: 'Katılımcı 1 için toplu taşıma rotası bulunamadı. Bu kişinin ulaşım biçimini değiştirip yeniden arayın.' } }))
+  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await expect(page.getByText('Katılımcı 1 için toplu taşıma rotası bulunamadı.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Rotaları tamamla' })).toHaveCount(0)
 })

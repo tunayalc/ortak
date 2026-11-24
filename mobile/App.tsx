@@ -6,7 +6,10 @@ import * as Location from 'expo-location';
 import { useNetworkState } from 'expo-network';
 import { ArrowRight, CheckCheck, Flag, LocateFixed, MapPin, Moon, Navigation, RefreshCw, Share2, ShieldCheck, SlidersHorizontal, Sparkles, Star, Sun, Trash2, Users, X } from 'lucide-react-native';
 import { Button, Consent, Field, Heading, IconButton, Label, Notice, Section, Segmented, Stepper, Text, ThemeContext, Toggle, WeightSlider, styles, useTheme } from './src/components';
-import { categories, destinationOnlyUrl, makeParticipants, normalizeWeights, priceLabel, profiles } from './src/domain';
+import { categories, destinationOnlyUrl, makeParticipants, MAX_CATEGORIES, normalizeWeights, priceLabel, profiles, rebalanceWeights, travelModes } from './src/domain';
+import { ConsentScreen } from './src/ConsentScreen';
+import { hasConsent, saveConsent } from './src/consentStore';
+import { secureConsentStorage } from './src/secureConsentStorage';
 import { dark, light } from './src/theme';
 import { useMeeting, type Meeting } from './src/useMeeting';
 import { MeetingPlanner } from './src/MeetingPlanner';
@@ -24,8 +27,10 @@ export default function App() {
   const scheme = useColorScheme();
   const [appearance, setAppearance] = useState('Sistem');
   const isDark = appearance === 'Koyu' || (appearance === 'Sistem' && scheme === 'dark');
+  const [accepted, setAccepted] = useState<boolean | null>(null);
+  useEffect(() => { void hasConsent(secureConsentStorage).then(setAccepted); }, []);
   return <SafeAreaProvider><ThemeContext.Provider value={isDark ? dark : light}>
-    <StatusBar style={isDark ? 'light' : 'dark'} /><MobileApp appearance={appearance} setAppearance={setAppearance} isDark={isDark} />
+    <StatusBar style={isDark ? 'light' : 'dark'} />{accepted === null ? null : accepted ? <MobileApp appearance={appearance} setAppearance={setAppearance} isDark={isDark} /> : <ConsentScreen onAccept={() => { void saveConsent(secureConsentStorage); setAccepted(true); }} />}
   </ThemeContext.Provider></SafeAreaProvider>;
 }
 
@@ -104,8 +109,10 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
             {m.config?.capabilities?.group_invites_v1 && <GroupHost m={m}/>}
             <Section><Heading>Mekân bul</Heading>
               <Field label="Şehir" value={m.input.city} maxLength={80} editable={!disabled && !m.hasScenario} onChangeText={city => m.setInput({ ...m.input, city })} />
-              <Label>Mekân türü</Label><Segmented items={categories.map(c => c.label)} value={categories.find(c => c.id === m.input.category)!.label} disabled={disabled || m.hasScenario}
-                onChange={label => m.setInput({ ...m.input, category: categories.find(c => c.label === label)!.id })} />
+              <VenuePicker selected={m.input.categories?.length ? m.input.categories : [m.input.category]} disabled={disabled || m.hasScenario}
+                onChange={ids => m.setInput({ ...m.input, category: ids[0]!, categories: ids })} />
+              <Label>Varsayılan ulaşım</Label><Segmented items={travelModes.map(x => x.label)} value={travelModes.find(x => x.id === (m.input.travelMode || 'driving'))!.label} disabled={disabled || m.hasScenario}
+                onChange={label => m.setInput({ ...m.input, travelMode: travelModes.find(x => x.label === label)!.id })} />
               <Stepper label="Kişi sayısı" min={2} max={m.config?.max_participants || 8} value={m.input.participants.length} disabled={disabled || m.hasScenario}
                 onChange={count => { m.setInput({ ...m.input, participants: Array.from({ length: count }, (_, i) => m.input.participants[i] || makeParticipants(count)[i]!) }); m.setParsed([]); }} />
             </Section>
@@ -116,6 +123,9 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
                   onChangeText={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, label } : p) }); m.setParsed([]); }} />
                 <Field label={`${index + 1}. kişinin konumu`} placeholder="Google Maps linki veya enlem,boylam" value={person.value} autoCapitalize="none" maxLength={2048} editable={!disabled && !m.hasScenario}
                   onChangeText={value => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, value } : p) }); m.setParsed([]); }} />
+                <Label>{`${person.label} ulaşımı`}</Label><Segmented items={['Varsayılan', ...travelModes.map(x => x.label)]} disabled={disabled || m.hasScenario}
+                  value={person.travel_mode ? travelModes.find(x => x.id === person.travel_mode)!.label : 'Varsayılan'}
+                  onChange={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, travel_mode: travelModes.find(x => x.label === label)?.id || '' } : p) }); m.setParsed([]); }} />
                 {!m.hasScenario && <Button label={locating === index ? 'Konum alınıyor' : `Konumumu ${person.label} için kullan`} icon={LocateFixed} tone="secondary" disabled={disabled} onPress={() => setLocationConsent(index)} />}
                 <Stepper label={`${person.label} yakınlık ağırlığı`} min={0.5} max={2} step={0.5} suffix="×" value={person.delta_weight} disabled={disabled}
                   onChange={delta_weight => m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, delta_weight } : p) })} />
@@ -135,7 +145,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Segmented items={profiles.map(p => p.label)} disabled={disabled} value={profiles.find(p => JSON.stringify(p.weights) === JSON.stringify(m.preferences.weights))?.label || ''}
                 onChange={label => m.setPreferences({ ...m.preferences, weights: { ...profiles.find(p => p.label === label)!.weights } })} />
               {(Object.keys(weightLabels) as Array<keyof CriterionWeights>).map(key => <WeightSlider key={key} label={weightLabels[key]} value={m.preferences.weights[key]} disabled={disabled}
-                onChange={value => m.setPreferences({ ...m.preferences, weights: { ...m.preferences.weights, [key]: value } })} />)}
+                onChange={value => m.setPreferences({ ...m.preferences, weights: rebalanceWeights(m.preferences.weights, key, value) })} />)}
               <WeightSummary weights={m.preferences.weights} />
               <Stepper label="Öneri sayısı" min={1} max={m.config?.max_k || 3} value={m.preferences.k} disabled={disabled} onChange={k => m.setPreferences({ ...m.preferences, k })} />
               <Toggle label="En düşük mekân puanı" value={m.preferences.minRating !== null} disabled={disabled} onChange={on => m.setPreferences({ ...m.preferences, minRating: on ? 4 : null })} />
@@ -144,7 +154,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               {conditionLines(m.preferences.conditions).map(line => <Notice key={line}>{line}</Notice>)}
               {conditionLines(m.preferences.conditions).length > 0 && <Button label="Kesin koşulları kaldır" tone="secondary" disabled={disabled} onPress={() => m.setPreferences({ ...m.preferences, conditions: undefined })} />}
               {m.preferences.maxMinutes !== null && <Stepper label="En fazla dakika" min={5} max={240} step={5} value={m.preferences.maxMinutes} disabled={disabled} onChange={maxMinutes => m.setPreferences({ ...m.preferences, maxMinutes })} />}
-              <Label secondary>Fiyat seviyesi gerçek bir TL tutarı değildir. Yol süreleri araçla ulaşım içindir; kişi ağırlıkları yalnızca yakınlık tercihini değiştirir.</Label>
+              <Label secondary>Fiyat seviyesi gerçek bir TL tutarı değildir. Yol süreleri her kişinin seçtiği ulaşım biçimine göredir; kişi ağırlıkları yalnızca yakınlık tercihini değiştirir.</Label>
             </Section>
             <Section><View style={styles.between}><Heading>İsteğini anlat</Heading><Sparkles color={t.primary} size={22} /></View>
               <Label secondary>{m.health?.ai_ready ? `Sunucudaki model: ${m.health.ai_model}` : 'Yapay zekâ hazır değilse manuel tercihler kullanılabilir.'}</Label>
@@ -181,7 +191,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
 
           {tab === 'Gizlilik' && <>
             <Section><Heading>Gizlilik ve oturum</Heading>
-              <Label>Üyelik gerekmez. Kişi adları, konumlar, sonuçlar ve mobil erişim anahtarı cihazda yalnızca bellekte tutulur; uygulama bunları dosyaya veya yedeğe yazmaz.</Label>
+              <Label>Üyelik gerekmez. Kişi adları, konumlar, sonuçlar ve mobil erişim anahtarı cihazda yalnızca bellekte tutulur; uygulama bunları dosyaya veya yedeğe yazmaz. Cihazda yalnızca veri işleme bildirimini onayladığınıza dair kayıt (sürüm ve tarih) güvenli depoda saklanır.</Label>
               <Label>Sunucudaki buluşma verileri en geç iki saatte silinir. Uygulamayı kapatmak sunucudaki verileri anında silmez; aşağıdaki düğmeyle silme isteği gönderebilirsiniz.</Label>
               <Button label="Buluşma verilerimi sil" icon={Trash2} tone="danger" onPress={() => setConfirmDelete(true)} disabled={disabled} />
               <Label>Konumunuz yalnızca ilgili düğmeye bastığınızda alınır. Arka planda konum takibi yapılmaz. Link veya koordinat girişi için konum izni gerekmez.</Label>
@@ -253,7 +263,7 @@ function ResultCard({ result: r, isDark, openUrl, onError }: { result: Recommend
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><Star color={t.warning} size={17} /><Label>{r.candidate.rating > 0 ? r.candidate.rating.toFixed(1) : 'Puan bilinmiyor'}, {r.candidate.review_count} değerlendirme</Label></View>
     <Label>{priceLabel(r.candidate.price_level)}</Label>
     <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}><View style={{ gap: 3 }}><Label secondary>Ortalama yol</Label><Text style={{ color: t.text, fontWeight: '700', fontSize: 22 }}>{r.t_avg_minutes.toFixed(0)} dk</Text></View><View style={{ gap: 3 }}><Label secondary>En uzun yol</Label><Text style={{ color: t.text, fontWeight: '700', fontSize: 22 }}>{r.t_max_minutes.toFixed(0)} dk</Text></View></View>
-    <View style={{ gap: 8 }}>{r.per_user.map(p => <View key={p.user_id} style={styles.between}><View style={{ flex: 1 }}><Label>{p.label}</Label></View><Label>{p.raw_duration_minutes.toFixed(0)} dk, {p.distance_km.toFixed(1)} km</Label></View>)}</View>
+    <View style={{ gap: 8 }}>{r.per_user.map(p => <View key={p.user_id} style={styles.between}><View style={{ flex: 1 }}><Label>{p.label}{p.travel_mode ? ` (${travelModes.find(x => x.id === p.travel_mode)?.label || p.travel_mode})` : ''}</Label></View><Label>{p.raw_duration_minutes.toFixed(0)} dk, {p.distance_km.toFixed(1)} km</Label></View>)}</View>
     <View style={{ paddingTop: 10, paddingHorizontal: 10, paddingBottom: 5, alignSelf: 'flex-start' }}>
       <Image accessibilityLabel="Google Maps" source={isDark ? require('./assets/GoogleMaps_Logo_White_4x.png') : require('./assets/GoogleMaps_Logo_DarkGray_4x.png')} style={{ height: 18, width: 101 }} resizeMode="contain" />
     </View>
@@ -280,4 +290,26 @@ function Confirmation({ visible, title, onClose, children }: { visible: boolean;
       </View>
     </SafeAreaView>
   </Modal>;
+}
+
+function VenuePicker({ selected, onChange, disabled }: { selected: string[]; onChange: (ids: string[]) => void; disabled: boolean }) {
+  const t = useTheme();
+  const [open, setOpen] = useState(false);
+  const groups = [...new Set(categories.map(c => c.group))];
+  const names = selected.map(id => categories.find(c => c.id === id)?.label).join(', ');
+  return <View style={{ gap: 8 }}>
+    <Label>{`Mekân veya etkinlik türü (${selected.length}/${MAX_CATEGORIES})`}</Label>
+    <Button label={names} tone="secondary" disabled={disabled} onPress={() => setOpen(!open)} />
+    {open && <View style={{ gap: 10, padding: 12, borderWidth: 1, borderColor: t.divider, backgroundColor: t.surface }}>
+      <Label secondary>Birden fazla tür seçebilirsiniz; en fazla {MAX_CATEGORIES}.</Label>
+      {groups.map(group => <View key={group} style={{ gap: 2 }}>
+        <Text style={{ color: t.secondary, fontWeight: '700', fontSize: 13 }}>{group}</Text>
+        {categories.filter(c => c.group === group).map(c => {
+          const checked = selected.includes(c.id);
+          return <Consent key={c.id} label={c.label} checked={checked} disabled={disabled || (!checked && selected.length >= MAX_CATEGORIES)}
+            onChange={on => onChange(on ? [...selected, c.id] : selected.length > 1 ? selected.filter(id => id !== c.id) : selected)} />;
+        })}
+      </View>)}
+    </View>}
+  </View>;
 }

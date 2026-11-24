@@ -9,6 +9,19 @@ class BaseModel(PydanticModel):
     model_config = ConfigDict(allow_inf_nan=False)
 
 
+TRAVEL_MODES = {"driving", "walking", "transit", "bicycling"}
+
+
+def _check_mode(value: Optional[str]) -> Optional[str]:
+    """None means "use the group's default mode"."""
+    if value is None or value == "":
+        return None
+    normalized = value.lower().strip()
+    if normalized not in TRAVEL_MODES:
+        raise ValueError(f"travel_mode must be one of {sorted(TRAVEL_MODES)}")
+    return normalized
+
+
 class MoneyLimit(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     amount: float = Field(gt=0, le=10_000_000)
@@ -19,8 +32,19 @@ class MoneyLimit(BaseModel):
 class UserConditions(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     budget_limit: MoneyLimit | None = None
-    excluded_categories: list[Literal["cafe", "restaurant", "park", "museum", "library"]] = Field(default_factory=list, max_length=5)
+    excluded_categories: list[str] = Field(default_factory=list, max_length=64)
     required_features: list[Literal["quiet", "accessible", "alcohol_free"]] = Field(default_factory=list, max_length=3)
+
+
+    @field_validator("excluded_categories")
+    @classmethod
+    def known_excluded_categories(cls, value: list[str]) -> list[str]:
+        from .services.places_catalog import CATALOG
+
+        unknown = [item for item in value if item not in CATALOG]
+        if unknown:
+            raise ValueError("Bilinmeyen mekân türü: " + ", ".join(unknown))
+        return list(dict.fromkeys(value))
 
 
 class Coordinate(BaseModel):
@@ -36,12 +60,24 @@ class SyntheticUser(BaseModel):
     source: str = "synthetic"
     location_input_type: str = "synthetic"
     delta_weight: float = Field(default=1.0, ge=0.5, le=2.0)
+    travel_mode: Optional[str] = None
+
+    @field_validator("travel_mode")
+    @classmethod
+    def validate_user_mode(cls, value: Optional[str]) -> Optional[str]:
+        return _check_mode(value)
 
 
 class ParticipantLocationInput(BaseModel):
     label: str = Field(max_length=80)
     value: str = Field(max_length=2048)
     delta_weight: float = Field(default=1.0, ge=0.5, le=2.0)
+    travel_mode: Optional[str] = None
+
+    @field_validator("travel_mode")
+    @classmethod
+    def validate_participant_mode(cls, value: Optional[str]) -> Optional[str]:
+        return _check_mode(value)
 
 
 class ParsedLocation(BaseModel):
@@ -61,6 +97,7 @@ class LocationParseRequest(BaseModel):
 class ScenarioCreate(BaseModel):
     city: str = Field(default="Ankara", min_length=1, max_length=80)
     category: str = Field(default="cafe", min_length=1, max_length=80)
+    categories: Optional[list[str]] = Field(default=None, min_length=1, max_length=5)
     group_size: int = Field(default=5, ge=2, le=12)
     travel_mode: str = "driving"
     radius_m: int = Field(default=2500, ge=500, le=15000)
@@ -94,6 +131,7 @@ class Scenario(BaseModel):
     id: str
     city: str
     category: str
+    categories: list[str] = Field(default_factory=list)
     group_size: int
     travel_mode: str
     radius_m: int
@@ -205,6 +243,7 @@ class RecommendationRequest(BaseModel):
     max_duration_minutes: Optional[float] = Field(default=None, ge=1)
     min_rating: Optional[float] = Field(default=None, ge=0, le=5)
     category: Optional[str] = None
+    categories: Optional[list[str]] = Field(default=None, max_length=5)
     priority_profile: str = "balanced"
     fairness_weight: Optional[float] = Field(default=None, ge=0)
     efficiency_weight: Optional[float] = Field(default=None, ge=0)
@@ -265,6 +304,7 @@ class PerUserDuration(BaseModel):
     raw_duration_minutes: float
     adjusted_duration_minutes: float
     delta_weight: float
+    travel_mode: str = ""
 
 
 class EffectiveWeights(BaseModel):

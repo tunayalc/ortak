@@ -3,10 +3,11 @@ export type UserConditions = {
   budget_limit: { amount: number; scope: 'per_person' | 'group'; currency: 'TRY' } | null;
   excluded_categories: Category[]; required_features: ('quiet' | 'accessible' | 'alcohol_free')[];
 };
-export type Participant = { label: string; value: string; delta_weight: number };
+export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
+export type Participant = { label: string; value: string; delta_weight: number; travel_mode?: TravelMode | '' };
 export type ParsedLocation = Participant & { lat: number | null; lng: number | null; error: string | null };
-export type Category = 'cafe' | 'restaurant' | 'library' | 'park' | 'museum';
-export type SearchInput = { city: string; category: Category; participants: Participant[] };
+export type Category = string;
+export type SearchInput = { city: string; category: Category; categories?: Category[]; travelMode?: TravelMode; participants: Participant[] };
 export type Preferences = {
   weights: CriterionWeights;
   minRating: number | null;
@@ -15,7 +16,7 @@ export type Preferences = {
   conditions?: UserConditions;
 };
 export type RuntimeConfig = {
-  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean; group_invites_v1?: boolean };
+  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean; group_invites_v1?: boolean; venue_types_v1?: boolean; travel_modes_v1?: boolean };
   production: boolean;
   max_participants: number;
   max_candidates: number;
@@ -41,7 +42,7 @@ export type RouteMetric = {
 export type Recommendation = {
   rank: number; candidate: Candidate; score: number; t_avg_minutes: number; t_max_minutes: number;
   directions_url: string; cost_source: string;
-  per_user: Array<{ user_id: string; label: string; raw_duration_minutes: number; distance_km: number }>;
+  per_user: Array<{ user_id: string; label: string; raw_duration_minutes: number; distance_km: number; travel_mode?: string }>;
   constraint_status: { complete_route_matrix: boolean };
   score_breakdown: {
     rating_component: number; cost_component: number; proximity_component: number;

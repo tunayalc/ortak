@@ -15,7 +15,7 @@ class PlanModel(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False, str_strip_whitespace=True)
 
 
-Interest = Literal["conversation", "nature", "culture", "food", "study", "creative"]
+Interest = Literal["conversation", "nature", "culture", "food", "study", "creative", "entertainment", "adventure"]
 
 
 class PlanBrief(PlanModel):
@@ -73,7 +73,7 @@ class PlanStep(PlanModel):
 class PlanHandoff(PlanModel):
     city: str
     group_size: int
-    category: Literal["cafe", "park", "museum", "restaurant", "library"]
+    category: Literal["cafe", "park", "museum", "restaurant", "library", "bowling", "paintball", "cinema"]
     criterion_weights: dict[str, float]
     conditions: UserConditions = Field(default_factory=UserConditions)
 
@@ -106,6 +106,9 @@ CATALOG = (
     ("food", "restaurant", "indoor", "Birlikte yemek", "Sohbete zaman bırakan bir yemek buluşması.", 60, "relaxed", "Yemek ve sohbet", "Menü fiyatları, beslenme gereksinimleri ve grup rezervasyonu"),
     ("study", "library", "indoor", "Birlikte odaklan", "Ortak bir çalışma konusu için sessiz bir buluşma.", 60, "relaxed", "Odaklı çalışma", "Üyelik koşulları, çalışma alanı ve grup çalışmasına izin verilmesi"),
     ("creative", "cafe", "indoor", "Yaratıcı buluşma", "Kendi malzemelerinizle çizim veya fikir paylaşımı.", 45, "relaxed", "Çizim veya fikir paylaşımı", "Mekânın etkinliğe izni, masa alanı ve gerekli malzemeler"),
+    ("entertainment", "bowling", "indoor", "Bowling ve oyun gecesi", "Takımlara ayrılıp oynanan hafif rekabetli bir eğlence.", 60, "active", "Bowling veya oyun salonu", "Pist veya oyun saatleri, grup rezervasyonu ve yaş sınırları"),
+    ("entertainment", "cinema", "indoor", "Sinema buluşması", "Birlikte bir film izleyip sonrasında sohbet etme fikri.", 120, "relaxed", "Film ve film sonrası sohbet", "Seans saatleri, bilet fiyatı ve grup oturma düzeni"),
+    ("adventure", "paintball", "outdoor", "Paintball macerası", "Takımlara ayrılıp oynanan hareketli bir aktivite.", 90, "active", "Paintball veya macera sporu", "Güvenlik ekipmanı, yaş ve sağlık koşulları, rezervasyon ve hava durumu"),
 )
 
 
@@ -135,6 +138,9 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
         -(1 if e[6] == brief.pace else 0),
     ))
     plans = []
+    # Plan ids are interests; keep only the best-ranked idea per interest so ids stay unique.
+    seen: set[str] = set()
+    candidates = [entry for entry in candidates if not (entry[0] in seen or seen.add(entry[0]))]
     for interest, category, environment, title, summary, minimum, pace, activity, check in candidates[:3]:
         duration = min(brief.duration_minutes, max(minimum, 120 if interest == "study" else 90))
         steps = [PlanStep(title="Buluşma ve hazırlık", minutes=10),
@@ -169,6 +175,8 @@ def recommend_plans(brief: PlanBrief) -> PlanRecommendations:
                 "study": [("library", "Akran çalışma oturumu", "Konuları paylaşın ve sırayla birbirinize anlatın.")],
                 "culture": [("library", "Okuma ve yorum buluşması", "Bir metin seçip farklı yorumları konuşun.")],
                 "food": [("restaurant", "Tarif paylaşım masası", "Yemek sırasında herkes sevdiği bir tarifi anlatsın.")],
+                "entertainment": [("cafe", "Masa oyunu turnuvası", "Kendi getireceğiniz kart veya masa oyunlarıyla takım turnuvası.")],
+                "adventure": [("cafe", "Strateji oyunu masası", "Takımlara ayrılıp kâğıt üzerinde strateji oyunu oynayın.")],
             }[plan.id]
             for category, title, activity in alternatives:
                 if category in brief.conditions.excluded_categories:
@@ -233,7 +241,8 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
         "budget low means affordability preference only, never a guaranteed price. "
         "interests definitions: conversation=sohbet/tanışma; nature=yürüyüş/doğa/park; "
         "culture=müze/sergi/sanat gezisi; food=yemek/restoran; study=ders/çalışma/kütüphane; "
-        "creative=çizim/üretme/yaratıcı çalışma. Select only explicitly requested activities. "
+        "creative=çizim/üretme/yaratıcı çalışma; entertainment=bowling/sinema/oyun salonu/eğlence; "
+        "adventure=paintball/macera sporu/hareketli takım oyunu. Select only explicitly requested activities. "
         "Walking is nature, NOT conversation. Eating is food, NOT conversation. "
         "Meeting friends alone does NOT imply conversation; absent activity means interests=[]. "
         "Do not output real events, venues, dates, opening hours or prices. Current brief: "
@@ -268,7 +277,7 @@ async def interpret_plan(payload: PlanInterpretRequest, client: httpx.AsyncClien
             "budget": r"butce|ucuz|ekonomik|pahali|fiyat|hesapli",
             "environment": r"acik|kapali|iceri|disari",
             "pace": r"sakin|sessi[zsz]|hareketli|aktif|yavas|tempo",
-            "interests": r"sohbet|tanis|dog[aâ]|yuruy|park|muze|sergi|kultur|yemek|restoran|ders|calis|kutuphane|cizim|yaratic|uret",
+            "interests": r"sohbet|tanis|dog[aâ]|yuruy|park|muze|sergi|kultur|yemek|restoran|ders|calis|kutuphane|cizim|yaratic|uret|bowling|sinema|film|oyun|eglence|paintball|macera",
         }
         for field, pattern in signals.items():
             if not re.search(pattern, source) and getattr(brief, field) != getattr(current, field):

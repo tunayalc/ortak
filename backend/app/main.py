@@ -31,12 +31,13 @@ from .schemas import (
     ScenarioCreate,
 )
 from .services.experiments import run_experiment
-from .services.google_maps import build_route_matrix, search_candidates
+from .services.google_maps import RouteUnavailable, build_route_matrix, search_candidates
 from .services.google_transport import capture_google_calls
 from .services.google_usage import GoogleUsageBlocked, ensure_operation_capacity, search_operations, search_capacity, usage_status
 from .services.location_parser import parse_location_inputs
 from .services.preference_interpreter import PreferenceServiceError, interpret_preferences, llm_status
 from .services.scenario import create_scenario, get_scenario
+from .services.places_catalog import normalize_categories
 from .services.scoring import recommend
 from .services import session_store
 from .services import group_invites
@@ -107,7 +108,8 @@ def runtime_config(request: Request):
     usage = usage_status()
     return {
         "production": settings.production,
-        "capabilities": {"conditions_v1": True, "plan_context_v1": True, "group_invites_v1": True},
+        "capabilities": {"conditions_v1": True, "plan_context_v1": True, "group_invites_v1": True,
+                         "venue_types_v1": True, "travel_modes_v1": True},
         "csrf_token": request.session.get("csrf", "") if settings.production else "",
         "max_participants": settings.public_max_participants if settings.production else 12,
         "max_candidates": settings.public_max_candidates if settings.production else 12,
@@ -183,8 +185,10 @@ async def post_scenario(payload: ScenarioCreate) -> Scenario:
         size = len(payload.participant_locations or []) if payload.input_mode == "link" else payload.group_size
         if size > settings.public_max_participants or payload.users or payload.synthetic_fixture:
             raise HTTPException(400, "En fazla 8 kişi kullanılabilir; doğrudan test verisi yalnızca yerel geliştirmede kabul edilir.")
-        if payload.category not in {"cafe", "restaurant", "park", "library", "museum"}:
-            raise HTTPException(400, "Desteklenen bir mekân türü seçin.")
+        try:
+            normalize_categories(payload.categories, payload.category)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
         try:
             session_store.ensure_capacity()
         except ValueError as exc:
@@ -246,6 +250,8 @@ async def post_routes(payload: RouteMatrixRequest) -> list[RouteMetric]:
             raise HTTPException(429, "Mekân ve rota servisi meşgul. Kısa süre sonra yeniden deneyin.")
         async with _google_work_lock:
             return await build_route_matrix(payload.scenario_id, payload.provider)
+    except RouteUnavailable as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except GoogleUsageBlocked:

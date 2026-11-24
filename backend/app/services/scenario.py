@@ -8,6 +8,7 @@ from ..config import get_settings
 from ..db import dump_json, get_conn, load_json
 from ..schemas import Scenario, ScenarioCreate, SyntheticUser
 from .geo import city_center
+from .places_catalog import normalize_categories
 from .location_parser import parse_location_inputs
 from .google_transport import google_request
 from . import session_store
@@ -65,6 +66,7 @@ async def create_scenario(payload: ScenarioCreate) -> Scenario:
         session_store.ensure_capacity()
         payload = payload.model_copy(update={"session_only": True})
     scenario_id = str(uuid.uuid4())
+    categories = normalize_categories(payload.categories, payload.category)
     if payload.input_mode == "link":
         if not payload.session_only:
             raise ValueError("Link ile kişi konumu girişinde session_only=true zorunludur.")
@@ -84,6 +86,7 @@ async def create_scenario(payload: ScenarioCreate) -> Scenario:
                 source=item.source,
                 location_input_type=item.location_input_type,
                 delta_weight=item.delta_weight,
+                travel_mode=payload.participant_locations[index].travel_mode,
             )
             for index, item in enumerate(parsed_locations)
             if item.lat is not None and item.lng is not None
@@ -93,7 +96,8 @@ async def create_scenario(payload: ScenarioCreate) -> Scenario:
         scenario = Scenario(
             id=scenario_id,
             city=payload.city,
-            category=payload.category,
+            category=categories[0],
+            categories=categories,
             group_size=len(users),
             travel_mode=payload.travel_mode,
             radius_m=payload.radius_m,
@@ -121,7 +125,8 @@ async def create_scenario(payload: ScenarioCreate) -> Scenario:
     scenario = Scenario(
         id=scenario_id,
         city=payload.city,
-        category=payload.category,
+        category=categories[0],
+        categories=categories,
         group_size=len(users),
         travel_mode=payload.travel_mode,
         radius_m=payload.radius_m,
@@ -142,7 +147,7 @@ async def create_scenario(payload: ScenarioCreate) -> Scenario:
             (
                 scenario.id,
                 scenario.city,
-                scenario.category,
+                ",".join(scenario.categories),
                 scenario.group_size,
                 scenario.travel_mode,
                 scenario.radius_m,
@@ -164,10 +169,12 @@ def get_scenario(scenario_id: str) -> Scenario:
     if row is None:
         raise KeyError("Senaryo bulunamadı veya oturum süresi doldu.")
     users = [SyntheticUser(**item) for item in load_json(row["users_json"], [])]
+    stored = [item for item in row["category"].split(",") if item]
     return Scenario(
         id=row["id"],
         city=row["city"],
-        category=row["category"],
+        category=stored[0] if stored else row["category"],
+        categories=stored or [row["category"]],
         group_size=row["group_size"],
         travel_mode=row["travel_mode"],
         radius_m=row["radius_m"],

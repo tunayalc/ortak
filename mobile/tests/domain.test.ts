@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertCompleteMatrix, destinationOnlyUrl, inputKey, makeParticipants, normalizeWeights, participantWeights, priceLabel, validateParticipants, validateSuggestion } from '../src/domain';
+import { assertCompleteMatrix, categories, MAX_CATEGORIES, rebalanceWeights, travelModes, destinationOnlyUrl, inputKey, makeParticipants, normalizeWeights, participantWeights, priceLabel, validateParticipants, validateSuggestion } from '../src/domain';
 import type { Candidate, SearchInput, Suggestion } from '../src/types';
 
 test('criterion weights normalize; zero, negative and non-finite rejected', () => {
@@ -58,4 +58,23 @@ test('full genuine-provider route matrix required; partial or synthetic is not s
 test('unknown prices are neutral, not free', () => {
   assert.match(priceLabel(null), /nötr/);
   assert.equal(priceLabel(0), 'Ücretsiz');
+});
+
+test('moving one criterion moves the others and keeps the total at 100', () => {
+  const next = rebalanceWeights({ rating: 34, cost: 33, proximity: 33 }, 'cost', 10);
+  assert.equal(next.cost, 10);
+  assert.equal(next.rating + next.cost + next.proximity, 100);
+  assert.ok(next.rating > 34 && next.proximity > 33);
+  assert.deepEqual(rebalanceWeights({ rating: 0, cost: 50, proximity: 0 }, 'cost', 20), { rating: 40, cost: 20, proximity: 40 });
+});
+test('catalog has many grouped event types and each person can use their own transport', () => {
+  assert.ok(categories.length >= 40 && MAX_CATEGORIES === 5);
+  for (const id of ['paintball', 'bowling', 'escape_room', 'go_kart']) assert.ok(categories.some(c => c.id === id));
+  assert.deepEqual(travelModes.map(m => m.id), ['driving', 'transit', 'walking', 'bicycling']);
+  const input: SearchInput = { city: 'Ankara', category: 'cafe', participants: makeParticipants(2) };
+  const key = inputKey(input);
+  input.participants[0]!.travel_mode = 'transit';
+  assert.notEqual(inputKey(input), key);
+  const other: SearchInput = { ...input, categories: ['cafe', 'bowling'] };
+  assert.notEqual(inputKey(other), inputKey(input));
 });

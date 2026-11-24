@@ -51,6 +51,21 @@ test('resolved coordinates sent to scenario; original link remains in form', asy
   assert.equal('value' in body.participants[0], false);
   assert.equal('lat' in body.participants[0], false);
 });
+test('several venue types and each persons transport are sent to the scenario', async () => {
+  let body: Record<string, any> = {};
+  const api = createApi('https://api.test', async (url, init) => {
+    if (String(url).endsWith('/mobile/session')) return session();
+    body = JSON.parse(String(init!.body)); return response({});
+  });
+  await api.connect();
+  const people = makeParticipants(2); people[0]!.travel_mode = 'transit';
+  await api.create({ city: 'Ankara', category: 'paintball', categories: ['paintball', 'bowling'], travelMode: 'walking', participants: people },
+    people.map(p => ({ ...p, lat: 39.92, lng: 32.85, error: null })));
+  assert.deepEqual(body.categories, ['paintball', 'bowling']);
+  assert.equal(body.category, 'paintball');
+  assert.equal(body.travel_mode, 'walking');
+  assert.deepEqual(body.participant_locations.map((p: any) => p.travel_mode), ['transit', null]);
+});
 test('HTTP rejected except explicit loopback development, token invalidated on 401', async () => {
   assert.throws(() => createApi('http://api.example.com'));
   assert.throws(() => createApi('https://user:password@api.test'));

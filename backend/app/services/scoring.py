@@ -72,12 +72,10 @@ def min_max_normalize(values: list[float], invert: bool = False) -> list[float]:
     return normalized
 
 
-def google_directions_url(candidate: PlaceCandidate, mode: str) -> str:
-    return (
-        "https://www.google.com/maps/dir/?api=1"
-        f"&destination={candidate.lat},{candidate.lng}"
-        f"&travelmode={mode}"
-    )
+def google_directions_url(candidate: PlaceCandidate, mode: str | None) -> str:
+    """Destination only. Without a shared mode (people travel differently) Google picks one."""
+    url = f"https://www.google.com/maps/dir/?api=1&destination={candidate.lat},{candidate.lng}"
+    return url + (f"&travelmode={mode}" if mode else "")
 
 
 def _weights_from_lambda(lambda_value: float) -> EffectiveWeights:
@@ -139,19 +137,19 @@ def resolve_effective_weights(payload: RecommendationRequest) -> tuple[Effective
     return _weights_from_lambda(lambda_value), f"profile:{payload.priority_profile}", lambda_value
 
 
-def _quality_details(candidates: list[PlaceCandidate], category: str) -> dict[str, dict[str, float]]:
+def _in_categories(candidate: PlaceCandidate, categories: list[str]) -> bool:
+    name = candidate.name.lower()
+    return any(item.lower() in candidate.category.lower() or item.lower() in name for item in categories)
+
+
+def _quality_details(candidates: list[PlaceCandidate], categories: list[str]) -> dict[str, dict[str, float]]:
     rated = [candidate for candidate in candidates if candidate.rating > 0]
     known_ratings = dict(zip([candidate.id for candidate in rated], min_max_normalize([candidate.rating for candidate in rated])))
     ratings = [known_ratings.get(candidate.id, 0.5) for candidate in candidates]
     reviews = min_max_normalize([float(candidate.review_count) for candidate in candidates])
     scores: dict[str, dict[str, float]] = {}
     for index, candidate in enumerate(candidates):
-        category_match = (
-            1.0
-            if category.lower() in candidate.category.lower()
-            or category.lower() in candidate.name.lower()
-            else 0.0
-        )
+        category_match = 1.0 if _in_categories(candidate, categories) else 0.0
         quality_norm = (
             QUALITY_WEIGHTS["rating"] * ratings[index]
             + QUALITY_WEIGHTS["review"] * reviews[index]
@@ -398,12 +396,14 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         raise ValueError("Tam rota matrisi olan aday bulunamadı.")
     if payload.min_rating is not None:
         complete_candidates = [candidate for candidate in complete_candidates if candidate.rating >= payload.min_rating]
-    if payload.category:
-        complete_candidates = [
-            candidate
-            for candidate in complete_candidates
-            if payload.category.lower() in candidate.category.lower() or payload.category.lower() in candidate.name.lower()
-        ]
+    if payload.categories:
+        wanted = payload.categories
+    elif payload.category:
+        wanted = scenario.categories if payload.category in scenario.categories else [payload.category]
+    else:
+        wanted = []
+    if wanted:
+        complete_candidates = [candidate for candidate in complete_candidates if _in_categories(candidate, wanted)]
     complete_candidates = [candidate for candidate in complete_candidates
                            if candidate.category not in payload.conditions.excluded_categories]
     if payload.conditions.required_features:
@@ -417,6 +417,8 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
                                and cost <= per_person_limit]
 
     user_by_id = {user.id: user for user in scenario.users}
+    modes = {user.travel_mode or scenario.travel_mode for user in scenario.users}
+    shared_mode = next(iter(modes)) if len(modes) == 1 else None
     stats = []
     for candidate in complete_candidates:
         candidate_metrics = by_candidate[candidate.id]
@@ -465,7 +467,7 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
     decision_mode = effective_scoring_mode
     fairness_values = min_max_normalize([item["t_max"] for item in stats], invert=True)
     efficiency_values = min_max_normalize([item["t_sum"] for item in stats], invert=True)
-    quality = _quality_details([item["candidate"] for item in stats], scenario.category)
+    quality = _quality_details([item["candidate"] for item in stats], scenario.categories or [scenario.category])
     cost = _cost_details([item["candidate"] for item in stats], payload.manual_candidate_costs)
     effective_focus_mode = _resolve_focus_mode(
         payload.focus_location,
@@ -558,6 +560,7 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
                     raw_duration_minutes=round(raw_duration, 1),
                     adjusted_duration_minutes=round(adjusted_duration, 1),
                     delta_weight=round(user.delta_weight, 2),
+                    travel_mode=user.travel_mode or scenario.travel_mode,
                 )
             )
         per_user.sort(key=lambda row: row.user_id)
@@ -613,7 +616,7 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
                 variance_minutes=round(item["variance"], 2),
                 per_user=per_user,
                 explanation=explanation,
-                directions_url=google_directions_url(item["candidate"], scenario.travel_mode),
+                directions_url=google_directions_url(item["candidate"], shared_mode),
                 directions_note=directions_note,
                 effective_weights=effective_weights,
                 preference_source=preference_source,
@@ -684,6 +687,7 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
                             "max_duration_minutes": payload.max_duration_minutes,
                             "min_rating": payload.min_rating,
                             "category": payload.category,
+                            "categories": payload.categories,
                             "priority_profile": payload.priority_profile,
                             "advanced_preferences_enabled": payload.advanced_preferences_enabled,
                             "effective_weights": effective_weights.model_dump(),

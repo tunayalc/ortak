@@ -12,7 +12,7 @@ const base = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://158.180.36.171.nip
 export function useMeeting() {
   const [api] = useState(() => createApi(base, fetch, Date.now, __DEV__));
   const [session] = useState(() => new SearchSession(api));
-  const [input, setInput] = useState<SearchInput>({ city: 'Ankara', category: 'cafe', participants: makeParticipants(3) });
+  const [input, setInput] = useState<SearchInput>({ city: 'Ankara', category: 'cafe', categories: ['cafe'], travelMode: 'driving', participants: makeParticipants(3) });
   const [preferences, setPreferences] = useState<Preferences>(initialPreferences);
   const [config, setConfig] = useState<RuntimeConfig | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -32,7 +32,7 @@ export function useMeeting() {
 
   const clearMemory = useCallback(() => {
     session.forget(); setResults(null); setParsed([]); setSuggestion(null); setText('');
-    setInput({ city: 'Ankara', category: 'cafe', participants: makeParticipants(3) });
+    setInput({ city: 'Ankara', category: 'cafe', categories: ['cafe'], travelMode: 'driving', participants: makeParticipants(3) });
     setPreferences(initialPreferences); setConsent(false); setAiConsent(false); setResultSignature('');
     lastRecalculation.current = '';
   }, [session]);

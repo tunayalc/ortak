@@ -1,4 +1,4 @@
-import type { MobileApi } from './api';
+import { ApiError, type MobileApi } from './api';
 import { assertCompleteMatrix, inputKey, normalizeWeights, validateParticipants } from './domain';
 import type { Candidate, ParsedLocation, Preferences, RuntimeConfig, Scenario, SearchInput } from './types';
 import { validateConditions } from './conditions';
@@ -50,7 +50,16 @@ export class SearchSession {
     if (!this.candidates.length) throw new Error('Bu konumlar için uygun mekân bulunamadı. Yeni bir buluşma deneyin.');
     if (!this.routesReady) {
       onProgress('routes');
-      const routes = await this.api.routes(this.scenario.id);
+      let routes;
+      try { routes = await this.api.routes(this.scenario.id); }
+      catch (cause) {
+        // No route for someone's chosen transport: retrying would bill the same pair again.
+        if (cause instanceof ApiError && cause.status === 422) {
+          await this.clear().catch(() => this.forget());
+          throw new Error(`${cause.message} Bu arama silindi; ulaşım biçimini değiştirip yeniden arayabilirsiniz.`);
+        }
+        throw cause;
+      }
       assertCompleteMatrix(this.scenario.users.map(u => u.id), this.candidates, routes);
       this.routesReady = true;
     }

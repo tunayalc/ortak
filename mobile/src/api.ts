@@ -87,9 +87,10 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
     recommendPlans: (brief: PlanBrief) => { ensureConditions(brief.conditions); return request<PlanResult>('/plans/recommend', brief); },
     parse: (participants: Participant[]) => request<ParsedLocation[]>('/locations/parse', { items: participants }),
     create: (input: SearchInput, parsed: ParsedLocation[]) => request<Scenario>('/scenarios', {
-      city: input.city.trim(), category: input.category, group_size: input.participants.length,
-      input_mode: 'link', session_only: true, travel_mode: 'driving', radius_m: 2500,
-      participant_locations: parsed.map((p, i) => ({ label: input.participants[i]!.label.trim(), value: `${p.lat},${p.lng}`, delta_weight: input.participants[i]!.delta_weight })),
+      city: input.city.trim(), category: (input.categories?.length ? input.categories : [input.category])[0], categories: input.categories?.length ? input.categories : [input.category],
+      group_size: input.participants.length,
+      input_mode: 'link', session_only: true, travel_mode: input.travelMode || 'driving', radius_m: 2500,
+      participant_locations: parsed.map((p, i) => ({ label: input.participants[i]!.label.trim(), value: `${p.lat},${p.lng}`, delta_weight: input.participants[i]!.delta_weight, travel_mode: input.participants[i]!.travel_mode || null })),
     }),
     candidates: (id: string, maximum: number) => request<Candidate[]>('/candidates/search', { scenario_id: id, max_results: maximum }),
     routes: (id: string) => request<RouteMetric[]>('/routes/matrix', { scenario_id: id, provider: 'google' }),

@@ -29,22 +29,11 @@ import MeetingPlanner from './MeetingPlanner'
 import PlaceComparison from './PlaceComparison'
 import { GroupHost } from './GroupInvite'
 import { ConditionsEditor, ConditionsSummary, emptyConditions, StatusNotice, WorkflowNav } from './ui'
-import { checkedConditions, planSearchInput } from './planner'
+import { checkedConditions, planSearchInput, rebalanceWeights, travelModes } from './planner'
+import { categories, MAX_CATEGORIES } from './catalog'
 
-const categories = [
-  { value: 'cafe', label: 'Kafe' },
-  { value: 'restaurant', label: 'Restoran' },
-  { value: 'library', label: 'Kütüphane' },
-  { value: 'park', label: 'Park' },
-  { value: 'museum', label: 'Müze' },
-]
-
-const modes = [
-  { value: 'driving', label: 'Araç' },
-  { value: 'walking', label: 'Yürüme' },
-  { value: 'transit', label: 'Toplu taşıma' },
-  { value: 'bicycling', label: 'Bisiklet' },
-]
+const modeNames = Object.fromEntries(travelModes.map(mode => [mode.value, mode.label]))
+const categoryGroups = [...new Set(categories.map(item => item.group))]
 
 const criteriaProfiles = [
   { id: 'balanced', label: 'Dengeli', helper: 'Puan, fiyat ve yakınlık dengeli', weights: { rating: 34, cost: 33, proximity: 33 } },
@@ -81,7 +70,7 @@ const reportDraft = [
 
 const initialScenario = {
   city: 'Ankara',
-  category: 'cafe',
+  categories: ['cafe'],
   group_size: 3,
   travel_mode: 'driving',
   radius_m: 2500,
@@ -118,6 +107,7 @@ function makeParticipantRows(count, current = []) {
       label: existing?.label || `Katılımcı ${index + 1}`,
       value: existing?.value || '',
       delta_weight: existing?.delta_weight ?? 1,
+      travel_mode: existing?.travel_mode || '',
     }
   })
 }
@@ -273,6 +263,8 @@ function ProgressRail({ busy, counts, response }) {
 }
 
 function LocationPanel({
+  travelMode,
+  setTravelMode,
   inputMode,
   setInputMode,
   participantLocations,
@@ -311,7 +303,13 @@ function LocationPanel({
               </button>}
             </div>
           </div>
-          {inputMode === 'link' && <p className="privacy-note">Bu konumlar oturumluk tutulur; ham bağlantılar kalıcı veritabanına yazılmaz.</p>}
+          <label className="transport-select">
+            {inputMode === 'link' ? 'Varsayılan ulaşım' : 'Ulaşım'}
+            <select value={travelMode} onChange={(event) => setTravelMode(event.target.value)} disabled={Boolean(busy)}>
+              {travelModes.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+            </select>
+          </label>
+          {inputMode === 'link' && <p className="privacy-note">Bu konumlar oturumluk tutulur; ham bağlantılar kalıcı veritabanına yazılmaz. Her kişi için ulaşım biçimini ayrıca seçebilirsiniz.</p>}
           <div className={`participant-list ${inputMode === 'synthetic' ? 'synthetic' : ''}`}>
             {participantLocations.map((participant, index) => {
               const parsed = parsedLocations[index]
@@ -328,6 +326,13 @@ function LocationPanel({
                       value={participant.value}
                       onChange={(event) => updateParticipant(index, 'value', event.target.value)}
                     />
+                  </label>}
+                  {inputMode === 'link' && <label className="transport-select">
+                    Ulaşım
+                    <select value={participant.travel_mode || ''} onChange={(event) => updateParticipant(index, 'travel_mode', event.target.value)}>
+                      <option value="">Varsayılan ({modeNames[travelMode]})</option>
+                      {travelModes.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
+                    </select>
                   </label>}
                   <label className={inputMode === 'synthetic' ? 'synthetic-weight' : ''}>
                     {inputMode === 'link' && 'Yakınlık ağırlığı'}
@@ -790,7 +795,7 @@ function DetailPanel({ selected, response }) {
         <div className="person-list">
           {selected.per_user.map((user) => (
             <div key={user.user_id}>
-              <span>{user.label}</span>
+              <span>{user.label}{user.travel_mode ? ` (${modeNames[user.travel_mode] || user.travel_mode})` : ''}</span>
               <strong>
                 {user.raw_duration_minutes.toFixed(1)} dk
                 {user.delta_weight !== 1 ? ` -> ${user.adjusted_duration_minutes.toFixed(1)} dk (delta ${user.delta_weight.toFixed(1)})` : ''}
@@ -974,7 +979,7 @@ export default function App() {
   const searchContext = JSON.stringify({
     scenarioForm,
     inputMode,
-    participants: inputMode === 'link' ? participantLocations.map(({ label, value }) => ({ label, value })) : null,
+    participants: inputMode === 'link' ? participantLocations.map(({ label, value, travel_mode }) => ({ label, value, travel_mode })) : null,
   })
   const currentSearchContext = useRef(searchContext)
   currentSearchContext.current = searchContext
@@ -1093,7 +1098,7 @@ export default function App() {
   }
 
   function updateCriterionWeight(key, value) {
-    setCriterionWeights((current) => ({ ...current, [key]: value }))
+    setCriterionWeights((current) => rebalanceWeights(current, key, value))
     setCriteriaProfile('custom')
     setIntentSuggestion(null)
     setAiApplied(false)
@@ -1269,7 +1274,8 @@ export default function App() {
       k,
       max_duration_minutes: (overrides.maxDuration ?? maxDuration) === '' ? null : Number(overrides.maxDuration ?? maxDuration),
       min_rating: (overrides.minRating ?? minRating) === '' ? null : Number(overrides.minRating ?? minRating),
-      category: scenarioForm.category,
+      category: scenarioForm.categories[0],
+      categories: scenarioForm.categories,
       conditions: overrides.conditions ?? conditions,
       ...preferencePayload(overrides),
       ...(await advancedPriorityPayload(activeScenario, overrides)),
@@ -1280,6 +1286,7 @@ export default function App() {
     if (inputMode !== 'link') {
       return {
         ...scenarioForm,
+        category: scenarioForm.categories[0],
         input_mode: 'synthetic',
         session_only: false,
       }
@@ -1287,6 +1294,7 @@ export default function App() {
     const parsed = await parseParticipantLocations()
     return {
       ...scenarioForm,
+      category: scenarioForm.categories[0],
       group_size: participantLocations.length,
       input_mode: 'link',
       session_only: true,
@@ -1294,6 +1302,7 @@ export default function App() {
         ...person,
         value: `${parsed[index].lat},${parsed[index].lng}`,
         delta_weight: overrides.participantWeights?.[`user-${index + 1}`] ?? person.delta_weight,
+        travel_mode: person.travel_mode || null,
       })),
     }
   }
@@ -1361,7 +1370,7 @@ export default function App() {
       setSelectedId(result.recommendations[0]?.candidate.id || null)
       setRouteRecovery(null)
     } catch (err) {
-      if (step === 'routes' && created && currentSearchContext.current === searchContext) setRouteRecovery({ scenarioId: created.id, context: searchContext })
+      if (step === 'routes' && created && err.status !== 422 && currentSearchContext.current === searchContext) setRouteRecovery({ scenarioId: created.id, context: searchContext })
       setError(err.message)
     } finally {
       await refreshRuntimeConfig().catch(() => {})
@@ -1402,7 +1411,7 @@ export default function App() {
         scenario_id: scenario.id,
         k,
         conditions, min_rating: minRating === '' ? null : Number(minRating),
-        max_duration_minutes: maxDuration === '' ? null : Number(maxDuration), category: scenarioForm.category,
+        max_duration_minutes: maxDuration === '' ? null : Number(maxDuration), category: scenarioForm.categories[0], categories: scenarioForm.categories,
         ...preferencePayload(),
         ...(await advancedPriorityPayload(scenario)),
       })
@@ -1471,7 +1480,7 @@ export default function App() {
       }
       setScenario(null); setScenarioContext(null); setResponse(null); setSelectedId(null)
       setRouteRecovery(null); setExperiment(null); setCounts({ candidates: 0, routes: 0 }); setScenarioExpiresAt(0)
-      setScenarioForm({ ...initialScenario, city: next.city, category: next.category, group_size: next.group_size })
+      setScenarioForm({ ...initialScenario, city: next.city, categories: [next.category], group_size: next.group_size })
       setInputMode('link'); setParticipantLocations(next.participants); setParsedLocations([]); parsedLocationValues.current = ''
       setCriterionWeights(next.weights); setCriteriaProfile(next.weights.cost === 60 ? 'cost' : 'balanced')
       setConditions(next.conditions); setContextMode('continue'); intentVersion.current += 1
@@ -1522,14 +1531,6 @@ export default function App() {
             <input maxLength={80} value={scenarioForm.city} onChange={(event) => updateForm('city', event.target.value)} />
           </label>
           <label>
-            Mekân türü
-            <select value={scenarioForm.category} onChange={(event) => updateForm('category', event.target.value)}>
-              {categories.map((category) => (
-                <option key={category.value} value={category.value}>{category.label}</option>
-              ))}
-            </select>
-          </label>
-          <label>
             Grup
             <input type="number" min="2" max={runtimeConfig?.max_participants || 8} value={scenarioForm.group_size} onChange={(event) => updateForm('group_size', Math.min(runtimeConfig?.max_participants || 8, Math.max(2, Number(event.target.value))))} />
           </label>
@@ -1538,7 +1539,36 @@ export default function App() {
             <input type="number" min="1" max={runtimeConfig?.max_k || 3} value={k} onChange={(event) => setK(Math.min(runtimeConfig?.max_k || 3, Math.max(1, Number(event.target.value))))} />
           </label>
         </div>
+        <details className="venue-picker">
+          <summary>Mekân veya etkinlik türü: {scenarioForm.categories.map(id => categories.find(item => item.id === id)?.label).join(', ')} ({scenarioForm.categories.length}/{MAX_CATEGORIES})</summary>
+          <p className="privacy-note">Birden fazla tür seçebilirsiniz; arama hepsini birlikte kapsar. En fazla {MAX_CATEGORIES} tür seçilebilir.</p>
+          {categoryGroups.map(group => (
+            <fieldset key={group}>
+              <legend>{group}</legend>
+              <div className="chips">
+                {categories.filter(item => item.group === group).map(item => {
+                  const checked = scenarioForm.categories.includes(item.id)
+                  return (
+                    <label key={item.id}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={Boolean(busy) || (!checked && scenarioForm.categories.length >= MAX_CATEGORIES)}
+                        onChange={() => updateForm('categories', checked
+                          ? (scenarioForm.categories.length > 1 ? scenarioForm.categories.filter(id => id !== item.id) : scenarioForm.categories)
+                          : [...scenarioForm.categories, item.id])}
+                      />
+                      {item.label}
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
+          ))}
+        </details>
         <LocationPanel
+          travelMode={scenarioForm.travel_mode}
+          setTravelMode={(mode) => updateForm('travel_mode', mode)}
           inputMode={inputMode}
           setInputMode={(mode) => { setInputMode(mode); setIntentSuggestion(null) }}
           participantLocations={participantLocations}

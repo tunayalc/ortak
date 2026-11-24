@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { MobileApi } from '../src/api';
+import { ApiError, type MobileApi } from '../src/api';
 import { initialPreferences, makeParticipants } from '../src/domain';
 import { SearchSession } from '../src/search';
 import type { Candidate, RuntimeConfig, SearchInput } from '../src/types';
@@ -63,4 +63,12 @@ test('expired or offline deletion is never silently reported as success', async 
   await session.run(input(), initialPreferences, config, () => {});
   api.deleteScenario = async () => { throw new Error('offline'); };
   await assert.rejects(session.clear()); assert.ok(session.scenario);
+});
+test('no route for a chosen transport clears the search instead of re-billing the same pair', async () => {
+  const { api, calls, session } = fixture();
+  api.routes = async () => { calls.routes++; throw new ApiError('Kişi 1 için toplu taşıma rotası bulunamadı.', 422); };
+  await assert.rejects(session.run(input(), initialPreferences, config, () => {}), /toplu taşıma rotası bulunamadı.*silindi/);
+  assert.equal(calls.delete, 1);
+  assert.equal(session.scenario, null);
+  assert.equal(calls.recommend, 0);
 });

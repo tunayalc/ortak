@@ -1,10 +1,28 @@
 import type { Candidate, CriterionWeights, Participant, Preferences, RouteMetric, SearchInput, Suggestion } from './types';
 import { validateConditions } from './conditions';
 
-export const categories = [
-  { id: 'cafe', label: 'Kafe' }, { id: 'restaurant', label: 'Restoran' },
-  { id: 'library', label: 'Kütüphane' }, { id: 'park', label: 'Park' }, { id: 'museum', label: 'Müze' },
+export { categories, MAX_CATEGORIES, categoryIds } from './catalog';
+export const travelModes = [
+  { id: 'driving', label: 'Araç' }, { id: 'transit', label: 'Toplu taşıma' }, { id: 'walking', label: 'Yürüme' }, { id: 'bicycling', label: 'Bisiklet' },
 ] as const;
+
+// Moving one criterion moves the other two so the weights keep summing to 100.
+export function rebalanceWeights(weights: CriterionWeights, key: keyof CriterionWeights, value: number): CriterionWeights {
+  const keys = Object.keys(weights) as Array<keyof CriterionWeights>;
+  const next = Math.max(0, Math.min(100, Math.round(Number.isFinite(value) ? value : 0)));
+  const others = keys.filter(k => k !== key);
+  const rest = 100 - next;
+  const total = others.reduce((sum, k) => sum + (weights[k] || 0), 0);
+  const result = { ...weights, [key]: next } as CriterionWeights;
+  let used = 0;
+  others.forEach((k, i) => {
+    if (i === others.length - 1) { result[k] = rest - used; return; }
+    const share = total > 0 ? Math.round(rest * (weights[k] || 0) / total) : Math.round(rest / others.length);
+    result[k] = Math.min(rest - used, share);
+    used += result[k];
+  });
+  return result;
+}
 export const profiles = [
   { label: 'Dengeli', weights: { rating: 34, cost: 33, proximity: 33 } },
   { label: 'Puan', weights: { rating: 60, cost: 20, proximity: 20 } },
@@ -37,7 +55,7 @@ export function validateParticipants(participants: Participant[], max = 8): void
 
 export function inputKey(input: SearchInput): string {
   // Preference changes reuse the same Google matrix; location/name changes do not.
-  return JSON.stringify([input.city.trim(), input.category, input.participants.map(p => [p.label.trim(), p.value.trim()])]);
+  return JSON.stringify([input.city.trim(), input.categories?.length ? input.categories : [input.category], input.travelMode || 'driving', input.participants.map(p => [p.label.trim(), p.value.trim(), p.travel_mode || ''])]);
 }
 
 export function participantWeights(participants: Participant[]): Record<string, number> {

@@ -13,6 +13,7 @@ from ..config import get_settings
 from ..db import dump_json, get_conn, load_json
 from ..schemas import PlaceCandidate, RouteMetric
 from .geo import centroid, haversine_m, synthetic_duration_seconds
+from .places_catalog import balanced, google_types, match_category
 from .scenario import get_scenario
 from .google_transport import google_request
 from .google_usage import GoogleUsageBlocked, ensure_operation_capacity
@@ -21,7 +22,14 @@ from . import session_store
 
 GOOGLE_PLACES_URL = "https://places.googleapis.com/v1/places:searchNearby"
 GOOGLE_ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes"
-PLACES_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.attributions"
+PLACES_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.priceLevel,places.attributions,places.types"
+MODE_LABELS = {"driving": "araç", "transit": "toplu taşıma", "walking": "yürüyüş", "bicycling": "bisiklet"}
+
+
+class RouteUnavailable(ValueError):
+    """Google found no route for a person's chosen non-driving mode."""
+
+
 PRICE_LEVELS = {
     "PRICE_LEVEL_FREE": 0,
     "PRICE_LEVEL_INEXPENSIVE": 1,
@@ -64,7 +72,8 @@ async def _google_post(url: str, body: dict[str, Any], method: str, field_mask: 
 def _synthetic_candidates(scenario_id: str, max_results: int) -> list[PlaceCandidate]:
     scenario = get_scenario(scenario_id)
     center_lat, center_lng = centroid(scenario.users)
-    rng = random.Random(f"{scenario.seed}:{scenario.city}:{scenario.category}:{max_results}")
+    categories = scenario.categories or [scenario.category]
+    rng = random.Random(f"{scenario.seed}:{scenario.city}:{','.join(categories)}:{max_results}")
     labels = [
         "Merkez Nokta",
         "Denge Durağı",
@@ -95,7 +104,7 @@ def _synthetic_candidates(scenario_id: str, max_results: int) -> list[PlaceCandi
                 place_id=place_id,
                 name=f"{labels[index % len(labels)]} {index + 1}",
                 address=f"{scenario.city} sentetik bölge {index + 1}",
-                category=scenario.category,
+                category=categories[index % len(categories)],
                 rating=rating,
                 review_count=review_count,
                 lat=round(lat, 6),
@@ -193,8 +202,9 @@ async def search_candidates(scenario_id: str, max_results: int, radius_m: int | 
     payload = await _google_post(
         GOOGLE_PLACES_URL,
         {
-            "includedTypes": [scenario.category],
-            "maxResultCount": min(max_results, 20),
+            "includedTypes": google_types(scenario.categories or [scenario.category]),
+            # Billed per request, not per result: fetch a full page and balance the categories below.
+            "maxResultCount": 20,
             "languageCode": "tr",
             "locationRestriction": {"circle": {
                 "center": {"latitude": center_lat, "longitude": center_lng},
@@ -204,26 +214,30 @@ async def search_candidates(scenario_id: str, max_results: int, radius_m: int | 
         "places_nearby_new",
         PLACES_FIELD_MASK,
     )
-    candidates: list[PlaceCandidate] = []
-    for item in payload.get("places", [])[:max_results]:
+    selected = scenario.categories or [scenario.category]
+    matched: list[tuple[str, PlaceCandidate]] = []
+    for item in payload.get("places", []):
         location = item["location"]
-        candidates.append(
-            PlaceCandidate(
-                id=str(uuid.uuid4()),
-                scenario_id=scenario_id,
-                place_id=item["id"],
-                name=item.get("displayName", {}).get("text") or "Adsız mekân",
-                address=item.get("formattedAddress") or "",
-                category=scenario.category,
-                rating=float(item.get("rating") or 0),
-                review_count=int(item.get("userRatingCount") or 0),
-                lat=float(location["latitude"]),
-                lng=float(location["longitude"]),
-                provider="google",
-                price_level=PRICE_LEVELS.get(item.get("priceLevel")),
-                attributions=item.get("attributions", []),
-            )
-        )
+        name = item.get("displayName", {}).get("text") or "Adsız mekân"
+        category = match_category(selected, item.get("types") or [], name)
+        if category is None:
+            continue
+        matched.append((category, PlaceCandidate(
+            id=str(uuid.uuid4()),
+            scenario_id=scenario_id,
+            place_id=item["id"],
+            name=name,
+            address=item.get("formattedAddress") or "",
+            category=category,
+            rating=float(item.get("rating") or 0),
+            review_count=int(item.get("userRatingCount") or 0),
+            lat=float(location["latitude"]),
+            lng=float(location["longitude"]),
+            provider="google",
+            price_level=PRICE_LEVELS.get(item.get("priceLevel")),
+            attributions=item.get("attributions", []),
+        )))
+    candidates: list[PlaceCandidate] = balanced(matched, selected, max_results)  # type: ignore[assignment]
     _save_candidates(candidates, payload)
     return candidates
 
@@ -398,13 +412,14 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
     if provider == "auto":
         desired_provider = "google" if settings.has_google_key else "osrm"
     existing_providers = {metric.provider for metric in existing}
-    walking_with_synthetic = desired_provider == "osrm" and scenario.travel_mode != "driving"
+    modes = {user.travel_mode or scenario.travel_mode for user in scenario.users}
+    walking_with_synthetic = desired_provider == "osrm" and modes != {"driving"}
     provider_matches = (
         {(metric.user_id, metric.candidate_id) for metric in existing} == expected_pairs
         and (
             desired_provider == "auto"
             or existing_providers == {desired_provider}
-            or (walking_with_synthetic and existing_providers == {"synthetic"})
+            or (walking_with_synthetic and existing_providers <= {"osrm", "synthetic"})
         )
     )
     if provider_matches:
@@ -431,7 +446,7 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
                         user.lat,
                         user.lng,
                         candidate,
-                        scenario.travel_mode,
+                        user.travel_mode or scenario.travel_mode,
                         use_cache=not scenario.session_only,
                     )
                     _save_route(metric)
@@ -439,10 +454,19 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
                     continue
                 except GoogleUsageBlocked:
                     raise
+                except RuntimeError as exc:
+                    mode = user.travel_mode or scenario.travel_mode
+                    if mode != "driving" and "uygun rota bulamadı" in str(exc):
+                        raise RouteUnavailable(
+                            f"{user.label} için {MODE_LABELS.get(mode, mode)} rotası bulunamadı. "
+                            "Bu kişinin ulaşım biçimini değiştirip yeniden arayın."
+                        ) from exc
+                    if provider == "google":
+                        raise
                 except Exception:
                     if provider == "google":
                         raise
-            if use_osrm and scenario.travel_mode == "driving":
+            if use_osrm and (user.travel_mode or scenario.travel_mode) == "driving":
                 try:
                     metric = await _osrm_route(
                         scenario_id,
@@ -465,7 +489,7 @@ async def build_route_matrix(scenario_id: str, provider: str = "auto") -> list[R
                 user.lat,
                 user.lng,
                 candidate,
-                scenario.travel_mode,
+                user.travel_mode or scenario.travel_mode,
             )
             _save_route(metric)
             metrics.append(metric)

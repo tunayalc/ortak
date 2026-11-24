@@ -174,3 +174,11 @@ def test_unmentioned_place_is_not_accepted_from_model(monkeypatch):
     result = call_model(monkeypatch, handler, "Üç arkadaş sohbet etmek istiyoruz.")
     assert result.brief.city == "" and result.brief.area == ""
     assert planner.recommend_plans(result.brief).plans == []
+
+
+def test_new_interests_produce_unique_plan_ids():
+    result = planner.recommend_plans(brief(interests=["entertainment", "adventure"], duration_minutes=150, environment="any"))
+    ids = [plan.id for plan in result.plans]
+    assert len(ids) == len(set(ids)) and set(ids) == {"entertainment", "adventure"}
+    relaxed = planner.recommend_plans(brief(interests=["entertainment"], duration_minutes=150, pace="relaxed"))
+    assert [plan.title for plan in relaxed.plans] == ["Sinema buluşması"]

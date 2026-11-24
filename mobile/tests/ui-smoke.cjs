@@ -18,7 +18,7 @@ async (page) => {
     counts[path] = (counts[path] || 0) + 1;
     const body = req.postDataJSON();
     if (path === '/mobile/session') return fulfill(route, { access_token: 'ui-test-only', token_type: 'Bearer', expires_in: 7200 });
-    if (path === '/runtime-config') return fulfill(route, { production: true, max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: capacity, google_unavailable_reason: 'Test kotası kapalı.', google_search_capacity: { resolved_coordinates: { 3: { available: capacity, reason: capacity ? '' : 'Test kotası kapalı.' } } } });
+    if (path === '/runtime-config') return fulfill(route, { capabilities: { conditions_v1: true, plan_context_v1: true, group_invites_v1: false, venue_types_v1: true, travel_modes_v1: true }, production: true, max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: capacity, google_unavailable_reason: 'Test kotası kapalı.', google_search_capacity: { resolved_coordinates: { 3: { available: capacity, reason: capacity ? '' : 'Test kotası kapalı.' } } } });
     if (path === '/health') return fulfill(route, { status: 'ok', ai_ready: true, ai_provider: 'ollama', ai_model: 'llama3:8b', ai_status: 'ready' });
     if (path === '/locations/parse') return fulfill(route, body.items.map(p => ({ ...p, lat: p.value.includes('hatalı') ? null : 39.92, lng: 32.85, error: p.value.includes('hatalı') ? 'Test: konum çözülemedi.' : null })));
     if (path === '/preferences/interpret') {
@@ -41,6 +41,11 @@ async (page) => {
     throw new Error(`Unexpected test endpoint: ${path}`);
   });
   await page.reload();
+  await page.getByRole('button', { name: 'Kabul et ve devam et' }).waitFor();
+  check(!counts['/mobile/session'] && !counts['/runtime-config'], 'No network request before the data-processing approval');
+  check(await page.getByRole('button', { name: 'Kabul et ve devam et' }).isDisabled(), 'Approval button is disabled until the notice is confirmed');
+  await page.getByRole('checkbox', { name: /^Yukarıdaki bildirimin tamamını/ }).click();
+  await page.getByRole('button', { name: 'Kabul et ve devam et' }).click();
   await page.getByRole('button', { name: 'Bağlantıyı yenile' }).waitFor();
   await page.getByRole('button', { name: 'Koyu temaya geç' }).click();
   check(await page.getByRole('button', { name: 'Açık temaya geç' }).isVisible(), 'Header theme control switches to dark');
@@ -48,6 +53,12 @@ async (page) => {
   await page.getByRole('radio', { name: 'Sistem', exact: true }).click();
   check(await page.getByRole('radio', { name: 'Sistem', exact: true }).isChecked(), 'System appearance can be restored');
   await page.getByRole('tab', { name: 'Buluşma', exact: true }).click();
+  await page.getByRole('button', { name: 'Kafe', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Paintball ve macera sporları', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Bowling', exact: true }).click();
+  check(await page.getByText('Mekân veya etkinlik türü (3/5)', { exact: true }).isVisible(), 'Several venue types can be selected');
+  await page.getByRole('radio', { name: 'Toplu taşıma', exact: true }).nth(1).click();
+  check(await page.getByRole('radio', { name: 'Toplu taşıma', exact: true }).nth(1).isChecked(), 'A person can pick public transport');
   await page.getByRole('textbox', { name: '1. kişinin konumu', exact: true }).fill('hatalı link');
   await page.getByRole('textbox', { name: '2. kişinin konumu', exact: true }).fill('39.93,32.86');
   await page.getByRole('textbox', { name: '3. kişinin konumu', exact: true }).fill('39.94,32.87');
@@ -86,6 +97,8 @@ async (page) => {
   await page.getByRole('heading', { name: 'Test Kafe 1', exact: true }).waitFor();
   check(counts['/scenarios'] === 1 && counts['/candidates/search'] === 1 && counts['/locations/parse'] === 2, 'Resume reuses scenario, places and validated coordinates');
   check(lastScenario.participant_locations[0].value === '39.92,32.85', 'Scenario uses resolved coordinates not original URL');
+  check(JSON.stringify(lastScenario.categories) === '["cafe","paintball","bowling"]', 'Scenario carries every selected venue type');
+  check(lastScenario.participant_locations[0].travel_mode === 'transit' && lastScenario.participant_locations[1].travel_mode === null && lastScenario.travel_mode === 'driving', 'Scenario carries each person\'s transport mode');
   check(lastRecommendation.participant_proximity_weights['user-1'] === 2, 'Recommendation receives person delta');
   check(await page.getByText('Fiyat bilinmiyor; nötr kabul edildi.', { exact: true }).count() > 0, 'Unknown price clearly neutral');
   await page.getByRole('button', { name: 'Neden bu mekân?', exact: true }).first().click();

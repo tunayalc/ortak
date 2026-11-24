@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test'
+import { acceptConsent } from './helpers.js'
 
 const conditions = { budget_limit: { amount: 2000, scope: 'group', currency: 'TRY' }, excluded_categories: ['museum'], required_features: [] }
 const proposal = { source: 'ollama', model: 'llama3:8b', warnings: [], questions: [],
   brief: { city: 'Ankara', area: '', group_size: 4, duration_minutes: 120, budget: 'low', environment: 'any', pace: 'relaxed', interests: [], conditions } }
 
 test.beforeEach(async ({ page }) => {
+  await acceptConsent(page)
   await page.route('**/api/health', route => route.fulfill({ json: { ai_ready: true, ai_provider: 'ollama', ai_model: 'llama3:8b', google_configured: false } }))
   await page.goto('/')
 })

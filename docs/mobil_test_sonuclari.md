@@ -67,7 +67,7 @@ Bu kayıt mağaza kabulü veya canlı mobil uçtan uca başarı belgesi değildi
 ## Arayüz Kabulü
 
 `mobile/tests/ui-smoke.cjs`, yerel Expo önizlemesini Playwright üzerinden
-sınar. Tekrarlı çağrılar dahil 35 doğrulama; bunlar 35 bağımsız native cihaz testi
+sınar. Tekrarlı çağrılar dahil 41 doğrulama; bunlar 41 bağımsız native cihaz testi
 olarak yorumlanmamalıdır.
 
 - Hatalı konum yeni senaryo oluşturmaz; geçerli koordinat ikinci geocode'a gitmez.

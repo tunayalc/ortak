@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test'
+import { acceptConsent } from './helpers.js'
 
 test('davet, onaylı aktarım, kişi karşılaştırması ve bir koltuk için tek oy', async ({page, browser}) => {
+  await acceptConsent(page)
   let routes = 0
   page.on('request', r => { if (r.url().endsWith('/routes/matrix')) routes++ })
   await page.goto('/')
@@ -11,7 +13,7 @@ test('davet, onaylı aktarım, kişi karşılaştırması ve bir koltuk için te
   try {
     for(let i=0;i<2;i++) {
       const url=await page.getByLabel('Kişi '+(i+1)+' davet bağlantısı',{exact:true}).inputValue()
-      const guest=await browser.newPage()
+      const guest=await browser.newPage(); await acceptConsent(guest)
       guests.push(guest)
       await guest.goto(url)
       await guest.getByLabel('Başlangıç koordinatı').fill(i?'39.93,32.86':'39.92,32.85')

@@ -49,6 +49,7 @@ module.exports = {
     },
     web: { bundler: 'metro', favicon: './assets/icon.png', name: 'ORTAK Mobil' },
     plugins: [
+      ['expo-secure-store', { faceIDPermission: false }],
       ['expo-location', {
         locationWhenInUsePermission: 'Konumunuz yalnızca seçtiğiniz kişinin buluşma noktası olarak kullanılır. Arama yaptığınızda rota hesabı için Google Maps ile paylaşılır. Link veya koordinat da girebilirsiniz.',
         locationAlwaysPermission: false,

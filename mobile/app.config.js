@@ -8,7 +8,7 @@ module.exports = {
     icon: './assets/icon.png',
     ios: {
       bundleIdentifier: 'com.tunayalc.ortak',
-      buildNumber: '4',
+      buildNumber: '5',
       supportsTablet: true,
       infoPlist: {
         CFBundleDevelopmentRegion: 'tr',
@@ -35,9 +35,9 @@ module.exports = {
     },
     android: {
       package: 'com.tunayalc.ortak',
-      versionCode: 4,
+      versionCode: 5,
       allowBackup: false,
-      adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#232427', monochromeImage: './assets/monochrome-icon.png' },
+      adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#12A594', monochromeImage: './assets/monochrome-icon.png' },
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
       blockedPermissions: [
         'android.permission.ACCESS_BACKGROUND_LOCATION', 'android.permission.FOREGROUND_SERVICE_LOCATION',
@@ -60,7 +60,7 @@ module.exports = {
         isAndroidBackgroundLocationEnabled: false,
         isAndroidForegroundServiceEnabled: false,
       }],
-      ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 96, backgroundColor: '#ffffff', dark: { backgroundColor: '#151517' } }],
+      ['expo-splash-screen', { image: './assets/splash-icon.png', imageWidth: 96, backgroundColor: '#F4FBF9', dark: { backgroundColor: '#0E1E1C' } }],
     ],
     updates: { enabled: false },
   },

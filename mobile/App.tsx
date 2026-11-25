@@ -91,7 +91,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
   return <SafeAreaView style={{ flex: 1, backgroundColor: t.background }} edges={['top', 'bottom', 'left', 'right']}>
     <View style={{ flex: 1, width: '100%', maxWidth: 760, alignSelf: 'center' }}>
       <View style={{ paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', gap: 10, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: t.divider }}>
-        <Image source={require('./assets/splash-icon.png')} style={{ width: 34, height: 34, borderRadius: 2 }} accessible={false} />
+        <Image source={require('./assets/splash-icon.png')} style={{ width: 34, height: 34, borderRadius: 10 }} accessible={false} />
         <View style={{ flex: 1 }}><Text style={{ color: t.text, fontSize: 28, fontWeight: '400', letterSpacing: 0 }}>ORTAK</Text><Text style={{ color: t.secondary, fontSize: 12 }}>Buluşacağımız yer</Text></View>
         <IconButton label={isDark ? 'Açık temaya geç' : 'Koyu temaya geç'} icon={isDark ? Sun : Moon} onPress={() => setAppearance(isDark ? 'Açık' : 'Koyu')} />
         <IconButton label="Bağlantıyı yenile" icon={RefreshCw} onPress={() => void m.refresh()} disabled={disabled || offline} />
@@ -120,7 +120,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               {m.config?.capabilities?.rooms_v1 && <Segmented items={['Ben gireyim', 'Oda kur']} value={entry} disabled={disabled} onChange={setEntry} />}
               {m.config?.capabilities?.rooms_v1 && entry === 'Oda kur' && <RoomHost m={m} />}
               <Button label="Kişiler dengeli" icon={CheckCheck} tone="secondary" disabled={disabled} onPress={() => m.setInput({ ...m.input, participants: m.input.participants.map(p => ({ ...p, delta_weight: 1 })) })} />
-              {m.input.participants.map((person, index) => <View key={index} style={{ padding: 16, borderWidth: 1, borderColor: t.divider, borderRadius: 2, backgroundColor: t.surface, gap: 16 }}>
+              {m.input.participants.map((person, index) => <View key={index} style={{ padding: 16, borderWidth: 1, borderColor: t.divider, borderRadius: 10, backgroundColor: t.surface, gap: 16 }}>
                 <Field label={`${index + 1}. kişinin adı`} value={person.label} maxLength={80} editable={!disabled && !m.hasScenario}
                   onChangeText={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, label } : p) }); m.setParsed([]); }} />
                 <Field label={`${index + 1}. kişinin konumu`} placeholder="Yer adı (ör. Ankara Kalesi), harita linki veya enlem,boylam" value={person.value} autoCapitalize="none" maxLength={2048} editable={!disabled && !m.hasScenario}
@@ -245,7 +245,7 @@ function WeightSummary({ weights }: { weights: CriterionWeights }) {
   let normalized;
   try { normalized = normalizeWeights(weights); } catch { return <Notice error>En az bir kriterin ağırlığını artırın.</Notice>; }
   return <View style={{ gap: 8 }}><View style={{ flexDirection: 'row', height: 6, gap: 2 }}>
-    {[normalized.rating, normalized.cost, normalized.proximity].map((weight, i) => <View key={i} style={{ flex: weight, backgroundColor: [t.primary, t.accent, t.warning][i], borderRadius: 2 }} />)}
+    {[normalized.rating, normalized.cost, normalized.proximity].map((weight, i) => <View key={i} style={{ flex: weight, backgroundColor: [t.primary, t.accent, t.warning][i], borderRadius: 10 }} />)}
   </View><Label secondary>Puan %{Math.round(normalized.rating * 100)}, Fiyat %{Math.round(normalized.cost * 100)}, Yakınlık %{Math.round(normalized.proximity * 100)}</Label></View>;
 }
 
@@ -257,7 +257,7 @@ function ResultCard({ result: r, isDark, openUrl, onError }: { result: Recommend
     try { await Share.share({ message: `Buluşma noktası: ${destinationOnlyUrl(r.directions_url)}` }); }
     catch { onError('Paylaşım açılamadı.'); }
   };
-  return <View style={{ gap: 14, padding: 16, backgroundColor: t.surface, borderRadius: 2, borderWidth: 1, borderColor: r.rank === 1 ? t.primary : t.divider }}>
+  return <View style={{ gap: 14, padding: 16, backgroundColor: t.surface, borderRadius: 10, borderWidth: 1, borderColor: r.rank === 1 ? t.primary : t.divider }}>
     <View style={styles.between}><Text style={{ color: t.accent, fontWeight: '700', fontSize: 13 }}>{r.rank === 1 ? 'İlk tercih' : `${r.rank}. seçenek`}</Text><Label>{(r.score * 100).toFixed(1)} / 100</Label></View>
     <Heading>{r.candidate.name}</Heading><Label secondary>{r.candidate.address}</Label>
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><Star color={t.warning} size={17} /><Label>{r.candidate.rating > 0 ? r.candidate.rating.toFixed(1) : 'Puan bilinmiyor'}, {r.candidate.review_count} değerlendirme</Label></View>
@@ -285,7 +285,7 @@ function Confirmation({ visible, title, onClose, children }: { visible: boolean;
   const t = useTheme();
   return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
     <SafeAreaView style={{ flex: 1, backgroundColor: '#00000077', justifyContent: 'center', padding: 20 }}>
-      <View accessibilityViewIsModal style={{ padding: 24, backgroundColor: t.surface, borderRadius: 2, borderWidth: 1, borderColor: t.divider, width: '100%', maxWidth: 520, alignSelf: 'center', maxHeight: '90%' }}>
+      <View accessibilityViewIsModal style={{ padding: 24, backgroundColor: t.surface, borderRadius: 10, borderWidth: 1, borderColor: t.divider, width: '100%', maxWidth: 520, alignSelf: 'center', maxHeight: '90%' }}>
         <ScrollView contentContainerStyle={{ gap: 16 }}><View style={styles.between}><View style={{ flex: 1 }}><Heading>{title}</Heading></View><IconButton label="Kapat" icon={X} onPress={onClose} /></View>{children}</ScrollView>
       </View>
     </SafeAreaView>

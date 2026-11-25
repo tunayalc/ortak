@@ -1,13 +1,15 @@
+// "Deniz" palette: fresh teal with a warm yellow highlight. Text pairs meet WCAG AA (4.5:1),
+// borders 3:1, in both modes.
 export const light = {
-  background: '#ffffff', surface: '#ffffff', text: '#232427', secondary: '#55565a',
-  border: '#939499', primary: '#232427', onPrimary: '#ffffff', tint: '#f0f0f1',
-  accent: '#246249', accentTint: '#edf5f0', warning: '#76500a', warningTint: '#fff0cf',
-  error: '#9d2942', errorTint: '#fbe6eb', muted: '#96979b', divider: '#dedee0',
+  background: '#F4FBF9', surface: '#ffffff', text: '#0F2E2A', secondary: '#3E5E59',
+  border: '#76948F', primary: '#0B7A6E', onPrimary: '#ffffff', tint: '#DDF3EE',
+  accent: '#0A6B61', accentTint: '#E3F5F1', warning: '#76500a', warningTint: '#FFF1CC',
+  error: '#9d2942', errorTint: '#fbe6eb', muted: '#54706B', divider: '#D5E7E3',
 };
 export const dark: typeof light = {
-  background: '#151517', surface: '#151517', text: '#f5f5f5', secondary: '#c2c2c7',
-  border: '#77777f', primary: '#f5f5f5', onPrimary: '#151517', tint: '#28282c',
-  accent: '#98dace', accentTint: '#1c3a34', warning: '#f8d488', warningTint: '#42351d',
-  error: '#ffb2c2', errorTint: '#452832', muted: '#83838a', divider: '#3d3d42',
+  background: '#0E1E1C', surface: '#132826', text: '#EAF7F4', secondary: '#B5D3CE',
+  border: '#5E7F7A', primary: '#3CCFBC', onPrimary: '#062421', tint: '#1B3A36',
+  accent: '#7FE0D2', accentTint: '#173B36', warning: '#FFD27A', warningTint: '#3E321A',
+  error: '#ffb2c2', errorTint: '#452832', muted: '#8FB0AB', divider: '#24413D',
 };
 export type Theme = typeof light;

@@ -38,7 +38,7 @@ export function Button({ label, icon: Icon, onPress, disabled, tone = 'primary',
 export function IconButton({ label, icon: Icon, onPress, disabled }: { label: string; icon: LucideIcon; onPress: () => void; disabled?: boolean }) {
   const t = useTheme();
   return <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityState={{ disabled: !!disabled }} aria-disabled={!!disabled} disabled={disabled} onPress={onPress}
-    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.tint : 'transparent', opacity: disabled ? 0.4 : 1 })}>
+    style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? t.tint : 'transparent', opacity: disabled ? 0.4 : 1 })}>
     <Icon color={t.primary} size={21} strokeWidth={1.5} />
   </Pressable>;
 }
@@ -49,7 +49,7 @@ export function Field({ label, ...props }: TextInputProps & { label: string }) {
 }
 export function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
   const t = useTheme();
-  return <View accessibilityRole={error ? 'alert' : 'text'} accessibilityLiveRegion="polite" style={{ padding: 14, borderRadius: 2, backgroundColor: error ? t.errorTint : t.tint }}>
+  return <View accessibilityRole={error ? 'alert' : 'text'} accessibilityLiveRegion="polite" style={{ padding: 14, borderRadius: 10, backgroundColor: error ? t.errorTint : t.tint }}>
     <Text style={{ fontSize: 14, lineHeight: 21, color: error ? t.error : t.secondary }}>{children}</Text>
   </View>;
 }
@@ -59,7 +59,7 @@ export function Segmented({ items, value, onChange, disabled }: { items: string[
   const itemWidth = Math.min((items.length > 4 ? 104 : 80) * Math.max(1, fontScale), Math.min(width, 760) - 40);
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }} accessibilityRole="radiogroup">{items.map(item => <Pressable key={item}
     accessibilityRole="radio" accessibilityState={{ checked: item === value, disabled: !!disabled }} aria-checked={item === value} aria-disabled={!!disabled} disabled={disabled} onPress={() => onChange(item)}
-    style={{ flexGrow: 1, flexBasis: itemWidth, minWidth: itemWidth, minHeight: 44, borderRadius: 2, justifyContent: 'center', alignItems: 'center', padding: 8, backgroundColor: item === value ? t.primary : t.surface, borderWidth: 1, borderColor: item === value ? t.primary : t.border }}>
+    style={{ flexGrow: 1, flexBasis: itemWidth, minWidth: itemWidth, minHeight: 44, borderRadius: 10, justifyContent: 'center', alignItems: 'center', padding: 8, backgroundColor: item === value ? t.primary : t.surface, borderWidth: 1, borderColor: item === value ? t.primary : t.border }}>
     <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={{ color: item === value ? t.onPrimary : t.text, textAlign: 'center', fontSize: 14, fontWeight: item === value ? '500' : '400' }}>{item}</Text>
   </Pressable>)}</View>;
 }
@@ -91,6 +91,6 @@ export function Toggle({ label, value, onChange, disabled }: { label: string; va
 }
 export const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  button: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  input: { minHeight: 48, borderRadius: 2, borderWidth: 1, padding: 12, fontSize: 16, fontFamily, letterSpacing: 0 },
+  button: { minHeight: 48, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  input: { minHeight: 48, borderRadius: 10, borderWidth: 1, padding: 12, fontSize: 16, fontFamily, letterSpacing: 0 },
 });

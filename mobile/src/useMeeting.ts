@@ -20,8 +20,6 @@ export function useMeeting() {
   const [results, setResults] = useState<RecommendationResponse | null>(null);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [text, setText] = useState('');
-  const [consent, setConsent] = useState(false);
-  const [aiConsent, setAiConsent] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -33,7 +31,7 @@ export function useMeeting() {
   const clearMemory = useCallback(() => {
     session.forget(); setResults(null); setParsed([]); setSuggestion(null); setText('');
     setInput({ city: 'Ankara', category: 'cafe', categories: ['cafe'], travelMode: 'driving', participants: makeParticipants(3) });
-    setPreferences(initialPreferences); setConsent(false); setAiConsent(false); setResultSignature('');
+    setPreferences(initialPreferences); setResultSignature('');
     lastRecalculation.current = '';
   }, [session]);
 
@@ -85,7 +83,6 @@ export function useMeeting() {
   }, [api, busy, input.participants, preferences, resultSignature, results, session, signature, task]);
 
   const validate = () => task('Konumlar doğrulanıyor', async () => {
-    if (!consent) throw new Error('Konum paylaşımını onaylayın.');
     if (!config) throw new Error('Önce sunucu bağlantısını yenileyin.');
     const locations = await session.validate(input, config.max_participants);
     setParsed(locations);
@@ -94,7 +91,6 @@ export function useMeeting() {
   });
 
   const search = () => task('Buluşma hazırlanıyor', async () => {
-    if (!consent) throw new Error('Konum paylaşımını onaylayın.');
     await api.connect();
     const fresh = await api.runtime(); setConfig(fresh);
     try {
@@ -106,7 +102,6 @@ export function useMeeting() {
   });
 
   const interpret = () => task('Llama tercihlerinizi yorumluyor', async () => {
-    if (!aiConsent) throw new Error('Tercih metninin işlenmesini onaylayın.');
     if (text.trim().length < 5 || text.length > 500) throw new Error('Tercihinizi 5 ile 500 karakter arasında yazın.');
     const response = await api.interpret(text, input.participants, preferences);
     setSuggestion(validateSuggestion(response, input.participants));
@@ -148,7 +143,7 @@ export function useMeeting() {
   };
 
   return { api, transferPlan, input, setInput, preferences, setPreferences, config, health, parsed, setParsed, results, suggestion, setSuggestion,
-    text, setText, consent, setConsent, aiConsent, setAiConsent, busy, error, setError, notice, setNotice,
+    text, setText, busy, error, setError, notice, setNotice,
     refresh, validate, search, interpret, applySuggestion, remove, report,
     hasScenario: Boolean(session.scenario), resultsStale: signature !== resultSignature, routesReady: session.routesReady };
 }

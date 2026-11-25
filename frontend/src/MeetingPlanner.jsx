@@ -13,7 +13,6 @@ export default function MeetingPlanner({ active, maxParticipants, available, onT
   const [pending, setPending] = useState(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
-  const [consent, setConsent] = useState(false)
   const [contextMode, setContextMode] = useState('continue')
   const version = useRef(0)
   const lock = useRef('')
@@ -80,9 +79,8 @@ export default function MeetingPlanner({ active, maxParticipants, available, onT
           <label htmlFor="plan-story">Buluşmayı anlat</label>
           <textarea id="plan-story" rows={4} maxLength={1200} disabled={disabled} value={text} onChange={event => { version.current += 1; setText(event.target.value); setProposal(null) }}
             placeholder="Ankara, Gölbaşı'nda yaşıyorum. Üç arkadaş iki saatliğine buluşacağız; sakin ve ekonomik bir şeyler yapalım." />
-          <label className="planner-consent"><input type="checkbox" checked={consent} disabled={disabled} onChange={e => setConsent(e.target.checked)} />
-            Metnimin sunucudaki Llama ile işlenmesini kabul ediyorum. Tam adres veya kişisel iletişim bilgisi eklemedim.</label>
-          <button className="secondary" disabled={Boolean(busy) || disabled || !consent || text.trim().length < 5 || !available} onClick={() => run('interpret')}><Sparkles size={17} />{busy === 'interpret' ? 'Yorumlanıyor…' : 'Anlattıklarımdan taslak çıkar'}</button>
+          <small className="privacy-note">Metin sunucudaki Llama ile işlenir; tam adres veya iletişim bilgisi yazmayın.</small>
+          <button className="secondary" disabled={Boolean(busy) || disabled || text.trim().length < 5 || !available} onClick={() => run('interpret')}><Sparkles size={17} />{busy === 'interpret' ? 'Yorumlanıyor…' : 'Anlattıklarımdan taslak çıkar'}</button>
           {busy === 'interpret' && <StatusNotice kind="loading">Taslak yorumlanıyor. Mevcut bilgiler henüz değişmedi.</StatusNotice>}
           {!available && <p className="source-note">Llama şu anda hazır değil. Buluşma bilgileriyle plan oluşturabilirsiniz.</p>}
           {proposal && <div className="planner-proposal" role="status"><h3>Taslağı incele</h3>

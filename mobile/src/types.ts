@@ -4,7 +4,7 @@ export type UserConditions = {
   excluded_categories: Category[]; required_features: ('quiet' | 'accessible' | 'alcohol_free')[];
 };
 export type TravelMode = 'driving' | 'transit' | 'walking' | 'bicycling';
-export type Participant = { label: string; value: string; delta_weight: number; travel_mode?: TravelMode | '' };
+export type Participant = { label: string; value: string; delta_weight: number; travel_mode?: TravelMode | ''; place?: string };
 export type ParsedLocation = Participant & { lat: number | null; lng: number | null; error: string | null };
 export type Category = string;
 export type SearchInput = { city: string; category: Category; categories?: Category[]; travelMode?: TravelMode; participants: Participant[] };
@@ -16,7 +16,7 @@ export type Preferences = {
   conditions?: UserConditions;
 };
 export type RuntimeConfig = {
-  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean; group_invites_v1?: boolean; venue_types_v1?: boolean; travel_modes_v1?: boolean };
+  capabilities?: { conditions_v1?: boolean; plan_context_v1?: boolean; group_invites_v1?: boolean; venue_types_v1?: boolean; travel_modes_v1?: boolean; place_search_v1?: boolean; rooms_v1?: boolean };
   production: boolean;
   max_participants: number;
   max_candidates: number;
@@ -61,4 +61,7 @@ export type Suggestion = {
   conditions?: UserConditions; questions?: string[];
 };
 export type FeedbackReason = 'incorrect_preferences' | 'unsafe_response' | 'other';
-export type Group = { seats: { token:string; ready:boolean }[]; choices: { id:string; name:string; votes:number; provider:string; attributions:{provider:string}[] }[]; expires_in:number };
+export type Group = { seats: { token?:string; ready:boolean; name?:string; travel_mode?:TravelMode|null }[]; choices: { id:string; name:string; votes:number; provider:string; attributions:{provider:string}[] }[]; expires_in:number;
+  room?: boolean; name?: string; saved?: boolean; join?: string | null; capacity?: number; owner_key?: string };
+export type RoomPoint = { lat: number; lng: number; label?: string; travel_mode?: TravelMode | null };
+export type PlaceResult = { name: string; address: string; lat: number; lng: number };

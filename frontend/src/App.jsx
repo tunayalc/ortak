@@ -7,6 +7,7 @@ import {
   Filter,
   Info,
   Link as LinkIcon,
+  DoorOpen,
   Loader2,
   MapPin,
   Moon,
@@ -27,7 +28,8 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import MeetingPlanner from './MeetingPlanner'
 import PlaceComparison from './PlaceComparison'
-import { GroupHost } from './GroupInvite'
+import { RoomHost } from './GroupInvite'
+import { PlacePicker } from './LocationTools'
 import { ConditionsEditor, ConditionsSummary, emptyConditions, StatusNotice, WorkflowNav } from './ui'
 import { checkedConditions, planSearchInput, rebalanceWeights, travelModes } from './planner'
 import { categories, MAX_CATEGORIES } from './catalog'
@@ -108,6 +110,7 @@ function makeParticipantRows(count, current = []) {
       value: existing?.value || '',
       delta_weight: existing?.delta_weight ?? 1,
       travel_mode: existing?.travel_mode || '',
+      place: existing?.place || '',
     }
   })
 }
@@ -267,6 +270,9 @@ function LocationPanel({
   setTravelMode,
   inputMode,
   setInputMode,
+  roomMode,
+  setRoomMode,
+  roomPanel,
   participantLocations,
   updateParticipant,
   balanceParticipants,
@@ -277,20 +283,25 @@ function LocationPanel({
   return (
     <section className="location-panel">
       <div className="input-mode-control" role="group" aria-label="Konum girişi">
-        <button className={inputMode === 'synthetic' ? 'active' : ''} onClick={() => setInputMode('synthetic')}>
+        <button className={inputMode === 'synthetic' ? 'active' : ''} onClick={() => { setInputMode('synthetic'); setRoomMode(false) }}>
           <MapPin size={16} />
           Sentetik konum
         </button>
-        <button className={inputMode === 'link' ? 'active' : ''} onClick={() => setInputMode('link')}>
+        <button className={inputMode === 'link' && !roomMode ? 'active' : ''} onClick={() => { setInputMode('link'); setRoomMode(false) }}>
           <LinkIcon size={16} />
-          Link ile kişi konumu
+          Konumları ben gireyim
         </button>
+        {roomPanel !== null && <button className={roomMode ? 'active' : ''} onClick={() => { setInputMode('link'); setRoomMode(true) }}>
+          <DoorOpen size={16} />
+          Oda kur
+        </button>}
       </div>
+      {roomMode && roomPanel}
       <div className="participant-panel">
           <div className="panel-head">
             <div>
               <strong>{inputMode === 'link' ? 'Kişi konumları' : 'Kişi yakınlıkları'}</strong>
-              {inputMode === 'link' && <span>Google Maps bağlantısı veya koordinat</span>}
+              {inputMode === 'link' && <span>{roomMode ? 'Odadan aktarılan konumlar burada görünür' : 'Yer adıyla arayın, cihaz konumunu kullanın veya bağlantı yapıştırın'}</span>}
             </div>
             <div className="panel-actions">
               <button className="secondary" onClick={balanceParticipants} disabled={Boolean(busy)}>
@@ -319,14 +330,14 @@ function LocationPanel({
                     Kişi
                     <input value={participant.label} onChange={(event) => updateParticipant(index, 'label', event.target.value)} />
                   </label> : <strong className="participant-name">{participant.label}</strong>}
-                  {inputMode === 'link' && <label className="location-input">
-                    Link veya koordinat
-                    <input
-                      placeholder="https://maps.google.com/... veya 39.92,32.85"
-                      value={participant.value}
-                      onChange={(event) => updateParticipant(index, 'value', event.target.value)}
-                    />
-                  </label>}
+                  {inputMode === 'link' && <PlacePicker
+                    label="Yer adı, link veya koordinat"
+                    value={participant.value}
+                    place={participant.place}
+                    disabled={Boolean(busy)}
+                    onChange={(value) => { updateParticipant(index, 'value', value); updateParticipant(index, 'place', '') }}
+                    onPick={(item) => { updateParticipant(index, 'value', `${item.lat},${item.lng}`); updateParticipant(index, 'place', item.address ? `${item.name} (${item.address})` : item.name) }}
+                  />}
                   {inputMode === 'link' && <label className="transport-select">
                     Ulaşım
                     <select value={participant.travel_mode || ''} onChange={(event) => updateParticipant(index, 'travel_mode', event.target.value)}>
@@ -929,6 +940,7 @@ export default function App() {
   const [scenario, setScenario] = useState(null)
   const [scenarioContext, setScenarioContext] = useState(null)
   const [inputMode, setInputMode] = useState('synthetic')
+  const [roomMode, setRoomMode] = useState(false)
   const [participantLocations, setParticipantLocations] = useState(() => makeParticipantRows(initialScenario.group_size))
   const [parsedLocations, setParsedLocations] = useState([])
   const parsedLocationValues = useRef('')
@@ -1571,6 +1583,12 @@ export default function App() {
           setTravelMode={(mode) => updateForm('travel_mode', mode)}
           inputMode={inputMode}
           setInputMode={(mode) => { setInputMode(mode); setIntentSuggestion(null) }}
+          roomMode={roomMode}
+          setRoomMode={setRoomMode}
+          roomPanel={runtimeConfig?.capabilities?.rooms_v1 ? <RoomHost result={response} disabled={Boolean(busy)} onImport={points => {
+            setInputMode('link'); updateForm('group_size', points.length); setParsedLocations([]); parsedLocationValues.current = ''
+            setParticipantLocations(makeParticipantRows(points.length).map((p, i) => ({ ...p, label: points[i].label || p.label, value: points[i].lat + ',' + points[i].lng, travel_mode: points[i].travel_mode || '', place: '' })))
+          }} /> : null}
           participantLocations={participantLocations}
           updateParticipant={updateParticipant}
           balanceParticipants={balanceParticipants}
@@ -1578,10 +1596,6 @@ export default function App() {
           onParse={handleParseLocations}
           busy={busy}
         />
-        {runtimeConfig?.capabilities?.group_invites_v1 && <GroupHost size={scenarioForm.group_size} result={response} disabled={Boolean(busy)} onImport={points => {
-          setInputMode('link'); updateForm('group_size',points.length); setParsedLocations([]); parsedLocationValues.current = ''
-          setParticipantLocations(makeParticipantRows(points.length).map((p,i) => ({...p,value:points[i].lat+','+points[i].lng})))
-        }} />}
         <div className="action-row">
           <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || (!canStartSearch && !canResumeRoutes)}>
             {busy ? <Loader2 size={18} className="spin" /> : <Play size={18} />}

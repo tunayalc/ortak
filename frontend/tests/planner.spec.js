@@ -36,7 +36,7 @@ test('plan is independently usable; optional transfer does not launch paid searc
   await page.getByRole('button', { name: 'Bilgileri aktar', exact: true }).click()
   await expect(page.getByLabel('Şehir', { exact: true })).toHaveValue('İzmir')
   await expect(page.getByLabel('Grup', { exact: true })).toHaveValue('4')
-  const locations = page.getByLabel('Link veya koordinat', { exact: true })
+  const locations = page.getByLabel('Yer adı, link veya koordinat', { exact: true })
   await expect(locations).toHaveCount(4)
   for (const field of await locations.all()) await expect(field).toHaveValue('')
   expect(paid).toHaveLength(0)
@@ -63,7 +63,6 @@ test('Llama interpretation is a preview, not an automatic setting change', async
   await page.route('**/api/plans/interpret', route => route.fulfill({ json: { source: 'ollama', model: 'llama3:8b', warnings: [],
     brief: { city: 'İstanbul', area: 'Kadıköy', group_size: 5, duration_minutes: 90, budget: 'low', environment: 'indoor', pace: 'relaxed', interests: ['conversation'] } } }))
   await page.getByLabel('Buluşmayı anlat', { exact: true }).fill('İstanbul Kadıköy, beş kişi sohbet edelim.')
-  await page.getByRole('checkbox', { name: /Metnimin sunucudaki Llama/ }).check()
   await page.getByRole('button', { name: 'Anlattıklarımdan taslak çıkar' }).click()
   await expect(page.getByRole('heading', { name: 'Taslağı incele' })).toBeVisible()
   await expect(page.getByLabel('Plan şehri', { exact: true })).toHaveValue('')
@@ -91,7 +90,6 @@ test('missing context and incompatible constraints do not fabricate plans', asyn
 test('model outage leaves manual planner usable', async ({ page }) => {
   await page.route('**/api/plans/interpret', route => route.fulfill({ status: 503, json: { detail: 'Llama bağlantısı kurulamadı.' } }))
   await page.getByLabel('Buluşmayı anlat', { exact: true }).fill('Ankara üç kişi buluşalım.')
-  await page.getByRole('checkbox', { name: /Metnimin sunucudaki Llama/ }).check()
   await page.getByRole('button', { name: 'Anlattıklarımdan taslak çıkar' }).click()
   await expect(page.getByRole('alert')).toContainText('Llama bağlantısı kurulamadı.')
   await page.getByLabel('Plan şehri', { exact: true }).fill('Ankara')

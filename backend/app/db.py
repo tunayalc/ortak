@@ -128,6 +128,22 @@ def init_db() -> None:
                 expires_at INTEGER NOT NULL,
                 PRIMARY KEY (subject, name, bucket)
             );
+            -- Saved rooms keep only names and token hashes; no locations.
+            CREATE TABLE IF NOT EXISTS saved_rooms (
+                id TEXT PRIMARY KEY,
+                owner_hash TEXT NOT NULL UNIQUE,
+                join_hash TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                updated_at INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS saved_room_members (
+                key_hash TEXT PRIMARY KEY,
+                room_id TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                travel_mode TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_saved_room_members_room ON saved_room_members(room_id);
             """
         )
         columns = {

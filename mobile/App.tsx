@@ -14,7 +14,8 @@ import { dark, light } from './src/theme';
 import { useMeeting, type Meeting } from './src/useMeeting';
 import { MeetingPlanner } from './src/MeetingPlanner';
 import { PlaceComparison } from './src/PlaceComparison';
-import { GroupHost } from './src/GroupHost';
+import { RoomHost } from './src/RoomHost';
+import { PlaceSearch } from './src/PlaceSearch';
 import type { CriterionWeights, FeedbackReason, Recommendation } from './src/types';
 
 type Tab = 'Buluşma' | 'Tercihler' | 'Öneriler' | 'Gizlilik';
@@ -45,7 +46,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
   useEffect(() => { if (m.error) scroll.current?.scrollTo({ y: 0, animated: false }); }, [m.error]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [locating, setLocating] = useState<number | null>(null);
-  const [locationConsent, setLocationConsent] = useState<number | null>(null);
+  const [entry, setEntry] = useState('Ben gireyim');
   const [reportOpen, setReportOpen] = useState(false);
   const [privateCover, setPrivateCover] = useState(false);
   useEffect(() => {
@@ -56,7 +57,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
   const disabled = Boolean(m.busy) || locating !== null;
 
   async function useLocation(index: number) {
-    setLocationConsent(null); setLocating(index); m.setError('');
+    setLocating(index); m.setError('');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) throw new Error('Konum izni verilmedi. Harita linki veya koordinat girebilirsiniz.');
@@ -67,7 +68,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
           new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('Konum alınamadı. Link veya koordinat girebilirsiniz.')), 20_000); }),
         ]);
-        m.setInput(current => ({ ...current, participants: current.participants.map((p, i) => i === index ? { ...p, value: `${position.coords.latitude.toFixed(6)},${position.coords.longitude.toFixed(6)}` } : p) }));
+        m.setInput(current => ({ ...current, participants: current.participants.map((p, i) => i === index ? { ...p, value: `${position.coords.latitude.toFixed(6)},${position.coords.longitude.toFixed(6)}`, place: 'Bulunduğum konum' } : p) }));
         m.setParsed([]);
       } finally { clearTimeout(timeout); }
     } catch (cause) { m.setError(cause instanceof Error ? cause.message : 'Konum alınamadı.'); }
@@ -106,7 +107,6 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
           <View style={{ display: engine === 'Mekân bul' ? 'flex' : 'none' }}>
           {tab === 'Buluşma' && <>
             <Section><Label>Henüz bir mekân fikriniz yok mu?</Label><Button label="Buluşma planı oluştur" icon={Sparkles} tone="secondary" onPress={() => setEngine('Buluşma planı')} /></Section>
-            {m.config?.capabilities?.group_invites_v1 && <GroupHost m={m}/>}
             <Section><Heading>Mekân bul</Heading>
               <Field label="Şehir" value={m.input.city} maxLength={80} editable={!disabled && !m.hasScenario} onChangeText={city => m.setInput({ ...m.input, city })} />
               <VenuePicker selected={m.input.categories?.length ? m.input.categories : [m.input.category]} disabled={disabled || m.hasScenario}
@@ -117,23 +117,27 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
                 onChange={count => { m.setInput({ ...m.input, participants: Array.from({ length: count }, (_, i) => m.input.participants[i] || makeParticipants(count)[i]!) }); m.setParsed([]); }} />
             </Section>
             <Section><View style={styles.between}><Heading>Kişi konumları</Heading><Users color={t.accent} size={22} /></View>
+              {m.config?.capabilities?.rooms_v1 && <Segmented items={['Ben gireyim', 'Oda kur']} value={entry} disabled={disabled} onChange={setEntry} />}
+              {m.config?.capabilities?.rooms_v1 && entry === 'Oda kur' && <RoomHost m={m} />}
               <Button label="Kişiler dengeli" icon={CheckCheck} tone="secondary" disabled={disabled} onPress={() => m.setInput({ ...m.input, participants: m.input.participants.map(p => ({ ...p, delta_weight: 1 })) })} />
               {m.input.participants.map((person, index) => <View key={index} style={{ padding: 16, borderWidth: 1, borderColor: t.divider, borderRadius: 2, backgroundColor: t.surface, gap: 16 }}>
                 <Field label={`${index + 1}. kişinin adı`} value={person.label} maxLength={80} editable={!disabled && !m.hasScenario}
                   onChangeText={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, label } : p) }); m.setParsed([]); }} />
-                <Field label={`${index + 1}. kişinin konumu`} placeholder="Google Maps linki veya enlem,boylam" value={person.value} autoCapitalize="none" maxLength={2048} editable={!disabled && !m.hasScenario}
-                  onChangeText={value => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, value } : p) }); m.setParsed([]); }} />
+                <Field label={`${index + 1}. kişinin konumu`} placeholder="Yer adı (ör. Ankara Kalesi), harita linki veya enlem,boylam" value={person.value} autoCapitalize="none" maxLength={2048} editable={!disabled && !m.hasScenario}
+                  onChangeText={value => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, value, place: '' } : p) }); m.setParsed([]); }} />
+                {person.place ? <Label secondary>{`Seçilen: ${person.place}`}</Label> : null}
+                {!m.hasScenario && m.config?.capabilities?.place_search_v1 && <PlaceSearch query={person.value} api={m.api} disabled={disabled || offline}
+                  onPick={place => { m.setInput(current => ({ ...current, participants: current.participants.map((p, i) => i === index ? { ...p, value: `${place.lat},${place.lng}`, place: place.address && place.address !== place.name ? `${place.name}, ${place.address}` : place.name } : p) })); m.setParsed([]); }} />}
                 <Label>{`${person.label} ulaşımı`}</Label><Segmented items={['Varsayılan', ...travelModes.map(x => x.label)]} disabled={disabled || m.hasScenario}
                   value={person.travel_mode ? travelModes.find(x => x.id === person.travel_mode)!.label : 'Varsayılan'}
                   onChange={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, travel_mode: travelModes.find(x => x.label === label)?.id || '' } : p) }); m.setParsed([]); }} />
-                {!m.hasScenario && <Button label={locating === index ? 'Konum alınıyor' : `Konumumu ${person.label} için kullan`} icon={LocateFixed} tone="secondary" disabled={disabled} onPress={() => setLocationConsent(index)} />}
+                {!m.hasScenario && <Button label={locating === index ? 'Konum alınıyor' : `Konumumu ${person.label} için kullan`} icon={LocateFixed} tone="secondary" disabled={disabled} onPress={() => void useLocation(index)} />}
                 <Stepper label={`${person.label} yakınlık ağırlığı`} min={0.5} max={2} step={0.5} suffix="×" value={person.delta_weight} disabled={disabled}
                   onChange={delta_weight => m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, delta_weight } : p) })} />
                 {m.parsed[index] ? <Notice error={!!m.parsed[index]!.error}>{m.parsed[index]!.error || 'Konum doğrulandı.'}</Notice> : null}
               </View>)}
               <Notice>Konumlar oturumluk işlenir ve en geç iki saatte sunucudan silinir. Ham linkler kalıcı kaydedilmez.</Notice>
-              <Consent label="Bu kişilerin konumlarını paylaşma iznim var. Konumların buluşma ve rota hesabı için Google Maps ile işlenmesini kabul ediyorum." checked={m.consent} disabled={disabled || m.hasScenario} onChange={m.setConsent} />
-              {!m.hasScenario && <Button label="Konumları doğrula" icon={CheckCheck} tone="secondary" onPress={() => void m.validate()} disabled={disabled || offline || !m.consent || !m.config} />}
+              {!m.hasScenario && <Button label="Konumları doğrula" icon={CheckCheck} tone="secondary" onPress={() => void m.validate()} disabled={disabled || offline || !m.config} />}
             </Section>
             <Section><Button label="Tercihlere geç" icon={ArrowRight} onPress={() => setTab('Tercihler')} disabled={disabled} />
               {m.hasScenario && <Button label="Yeni buluşma için mevcut verileri sil" icon={Trash2} tone="danger" disabled={disabled} onPress={() => setConfirmDelete(true)} />}
@@ -160,8 +164,8 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Label secondary>{m.health?.ai_ready ? `Sunucudaki model: ${m.health.ai_model}` : 'Yapay zekâ hazır değilse manuel tercihler kullanılabilir.'}</Label>
               <Field label="Buluşma tercihiniz" multiline numberOfLines={4} maxLength={500} value={m.text} editable={!disabled} onChangeText={m.setText}
                 placeholder="Fiyat önemli; Kişi 1'e iki kat yakın olsun." style={{ minHeight: 112, textAlignVertical: 'top' }} />
-              <Consent label="Tercih metnimin sunucudaki Llama modeliyle işlenmesini kabul ediyorum. Metne konum, kimlik veya ödeme bilgisi eklemedim." checked={m.aiConsent} disabled={disabled} onChange={m.setAiConsent} />
-              <Button label="Tercih önerisi oluştur" icon={Sparkles} tone="secondary" onPress={() => void m.interpret()} disabled={disabled || offline || !m.aiConsent || !m.config || m.health?.ai_ready === false} />
+              <Label secondary>Metin sunucudaki Llama ile işlenir; konum, kimlik veya ödeme bilgisi yazmayın.</Label>
+              <Button label="Tercih önerisi oluştur" icon={Sparkles} tone="secondary" onPress={() => void m.interpret()} disabled={disabled || offline || !m.config || m.health?.ai_ready === false} />
               {m.suggestion && <View style={{ borderLeftWidth: 3, borderLeftColor: t.accent, paddingLeft: 16, gap: 14 }}>
                 <Heading>Öneriyi incele</Heading><Label secondary>Bu değerler henüz uygulanmadı.</Label>
                 <WeightSummary weights={m.suggestion.criterion_weights} />
@@ -194,7 +198,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Label>Üyelik gerekmez. Kişi adları, konumlar, sonuçlar ve mobil erişim anahtarı cihazda yalnızca bellekte tutulur; uygulama bunları dosyaya veya yedeğe yazmaz. Cihazda yalnızca veri işleme bildirimini onayladığınıza dair kayıt (sürüm ve tarih) güvenli depoda saklanır.</Label>
               <Label>Sunucudaki buluşma verileri en geç iki saatte silinir. Uygulamayı kapatmak sunucudaki verileri anında silmez; aşağıdaki düğmeyle silme isteği gönderebilirsiniz.</Label>
               <Button label="Buluşma verilerimi sil" icon={Trash2} tone="danger" onPress={() => setConfirmDelete(true)} disabled={disabled} />
-              <Label>Konumunuz yalnızca ilgili düğmeye bastığınızda alınır. Arka planda konum takibi yapılmaz. Link veya koordinat girişi için konum izni gerekmez.</Label>
+              <Label>Konumunuz yalnızca ilgili düğmeye bastığınızda alınır. Arka planda konum takibi yapılmaz. Yer adı, link veya koordinat girişi için konum izni gerekmez.</Label>
               <Label>Google Maps, konum çözümleme, mekân ve yol sürelerini sağlar. Llama, uygulama sunucusunda tercih metnini yorumlar; kişi konumu alanları modele gönderilmez. Reklam veya analitik SDK'sı yoktur.</Label>
               <Label>Hız ve maliyet kayıtları içerik taşımaz. Yapay zekâ bildirimlerinde yalnızca sorun türü ve kriter ağırlıkları 30 gün saklanır; tercih cümlesi veya kişi bilgisi eklenmez.</Label>
               <Button label="Gizlilik politikası" icon={ShieldCheck} tone="secondary" onPress={() => void openUrl('https://ortak.web.tr/mobile-privacy.html')} />
@@ -203,7 +207,7 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
               <Button label="Destek" tone="secondary" onPress={() => void openUrl('https://github.com/tunayalc/ortak/issues')} />
             </Section>
             <Section><Heading>Görünüm</Heading><Segmented items={['Sistem', 'Açık', 'Koyu']} value={appearance} onChange={setAppearance} /></Section>
-            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.3.0 - Built with Meta Llama 3</Label></Section>
+            <Section><Heading>Model ve sonuçlar</Heading><Label>ORTAK puan, fiyat ve yakınlık tercihlerinizle sıralama yapar. Yakınlık kuş uçuşu mesafeye göre hesaplanır; yol süreleri ayrı gösterilir. Sonuçlar gerçek ücret, erişilebilirlik veya yol güvenliği garantisi değildir.</Label><Label secondary>ORTAK Mobil 0.4.0 - Built with Meta Llama 3</Label></Section>
           </>}
           </View>
         </ScrollView>
@@ -219,10 +223,6 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
       <Label>Kişi konumları, tercihler ve sonuçlar bu cihazdan temizlenecek. Kayıtlı buluşma varsa sunucudan da silinecek.</Label>
       <Button label="Verileri sil" icon={Trash2} tone="danger" onPress={() => { setConfirmDelete(false); void m.remove(); }} />
     </Confirmation>
-    <Confirmation visible={locationConsent !== null} title="Cihaz konumunu kullan" onClose={() => setLocationConsent(null)}>
-      <Label>Konum yalnızca seçtiğiniz kişi satırına eklenir. Buluşma aradığınızda rota hesabı için Google Maps ile paylaşılır. Arka planda takip yapılmaz; izin vermeden link de girebilirsiniz.</Label>
-      <Button label="Devam et" icon={LocateFixed} onPress={() => { if (locationConsent !== null) void useLocation(locationConsent); }} />
-    </Confirmation>
     <Confirmation visible={reportOpen} title="Öneriyi bildir" onClose={() => setReportOpen(false)}>
       <Label>Yalnızca sorun türü ve kriter ağırlıkları gönderilir; metniniz ve konumlarınız eklenmez.</Label>
       {([['incorrect_preferences', 'Tercihimi yanlış anladı'], ['unsafe_response', 'Uygunsuz yanıt'], ['other', 'Başka bir sorun']] as Array<[FeedbackReason, string]>).map(([reason, label]) =>
@@ -236,7 +236,7 @@ function SearchButton({ m, disabled, onPress }: { m: Meeting; disabled: boolean;
   const capacity = m.config?.google_search_capacity?.resolved_coordinates?.[String(m.input.participants.length)];
   const blocked = !m.routesReady && (!m.config?.google_available || (!m.hasScenario && capacity?.available === false));
   return <View style={{ gap: 12 }}>{blocked && m.config ? <Notice error>{capacity?.reason || m.config.google_unavailable_reason || 'Mekân araması şu anda kullanılamıyor.'}</Notice> : null}
-    <Button label={m.routesReady ? 'Sonuçları güncelle' : m.hasScenario ? 'Eksik adımları tamamla' : 'Buluşma yeri bul'} icon={MapPin} onPress={onPress} loading={!!m.busy} disabled={disabled || blocked || !m.consent || !m.config} />
+    <Button label={m.routesReady ? 'Sonuçları güncelle' : m.hasScenario ? 'Eksik adımları tamamla' : 'Buluşma yeri bul'} icon={MapPin} onPress={onPress} loading={!!m.busy} disabled={disabled || blocked || !m.config} />
   </View>;
 }
 

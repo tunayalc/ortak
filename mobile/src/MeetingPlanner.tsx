@@ -14,7 +14,6 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
   const [result, setResult] = useState<PlanResult | null>(null);
   const [selected, setSelected] = useState('');
   const [pending, setPending] = useState<MeetingPlan | null>(null);
-  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const lock = useRef('');
@@ -25,7 +24,7 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
   function clear() {
     requestSequence.current++; lock.current = ''; setBusy('');
     version.current++; setText(''); setBrief({ ...emptyBrief }); setProposal(null); setResult(null);
-    setSelected(''); setPending(null); setConsent(false); setError('');
+    setSelected(''); setPending(null); setError('');
   }
   useEffect(() => { expires.current = Date.now() + 7200000; }, [text, brief]);
   useEffect(() => {
@@ -63,8 +62,8 @@ export function MeetingPlanner({ m, active, onTransferred }: { m: Meeting; activ
     <Section><Heading>Birlikte ne yapalım?</Heading>
       <Field label="Buluşmayı anlat" multiline maxLength={1200} editable={!disabled} value={text} onChangeText={value => { version.current++; setText(value); setProposal(null); }}
         placeholder="Ankara'da üç arkadaş, iki saatlik sakin ve ekonomik bir buluşma istiyoruz." style={{ minHeight: 120, textAlignVertical: 'top' }} />
-      <Consent label="Metnimin sunucudaki Llama ile işlenmesini kabul ediyorum. Tam adres veya kişisel iletişim bilgisi eklemedim." checked={consent} onChange={setConsent} disabled={disabled} />
-      <Button label="Anlattıklarımdan taslak çıkar" icon={Sparkles} loading={busy === 'interpret'} disabled={disabled || !consent || text.trim().length < 5 || !m.health?.ai_ready} onPress={() => void run('interpret')} />
+      <Label secondary>Metin sunucudaki Llama ile işlenir; tam adres veya iletişim bilgisi yazmayın.</Label>
+      <Button label="Anlattıklarımdan taslak çıkar" icon={Sparkles} loading={busy === 'interpret'} disabled={disabled || text.trim().length < 5 || !m.health?.ai_ready} onPress={() => void run('interpret')} />
       {!m.health?.ai_ready && <Label secondary>Llama hazır değil. Buluşma bilgilerini kendiniz doldurabilirsiniz.</Label>}
       {proposal && <View style={{ borderLeftWidth: 3, borderLeftColor: t.accent, paddingLeft: 14, gap: 12 }}>
         <Heading>Taslağı incele</Heading>

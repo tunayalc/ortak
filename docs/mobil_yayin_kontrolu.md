@@ -57,6 +57,8 @@ nihai ikili paket ile gerçek veri akışı karşılaştırılarak tamamlanır. 
 | Rastgele oturum kimliği, günlük IP özeti | Oturum ayrımı ve kötüye kullanım engeli | Cihazda RAM; sunucuda süreli hız kayıtları; altyapının erişim kayıtları ayrıca incelenir |
 | İşlem türü, durum, süre ve maliyet | Harcama ve işletim kaydı | İçeriksiz kalıcı sayaç; konum veya tercih eklenmez |
 | AI bildirim kategorisi ve kriter ağırlığı | Hatalı öneriyi değerlendirme | 30 gün; ham metin, ad, konum, oturum/IP kimliği yok |
+| Kayıtlı oda adı, üye adları ve ulaşım tercihleri | Sık buluşan grubun aynı bağlantıyı yeniden kullanması; Oracle backend | Konum, oy ve sonuç yok; 90 gün kullanılmazsa veya "Kaydı sil" ile silinir; bağlantı ve anahtarlar yalnızca hash |
+| Yer arama metni | Başlangıç noktasını adla bulma; Google Geocoding | Saklanmaz; istek başına bir Geocoding çağrısı |
 
 Ad, konum, kullanıcı içeriği ve oturum kimliği için ihtiyatlı veri bildirimi
 konfigürasyona eklendi. Ad/konum birlikte tutulabildiği için bunlar otomatik

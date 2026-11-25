@@ -15,8 +15,8 @@ async function previewPreference(page) {
 }
 
 async function enterLocations(page) {
-  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
-  const fields = page.getByLabel('Link veya koordinat', { exact: true })
+  await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
+  const fields = page.getByLabel('Yer adı, link veya koordinat', { exact: true })
   for (const [index, coordinate] of ['39.92,32.85', '39.93,32.86', '39.94,32.87'].entries()) {
     await fields.nth(index).fill(coordinate)
   }
@@ -32,8 +32,8 @@ test.beforeEach(async ({ page }) => {
 
 test('form, kişi sayısı, delta ve dengeli kişiler', async ({ page }) => {
   await page.getByLabel('Grup', { exact: true }).fill('4')
-  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
-  await expect(page.getByLabel('Link veya koordinat', { exact: true })).toHaveCount(4)
+  await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
+  await expect(page.getByLabel('Yer adı, link veya koordinat', { exact: true })).toHaveCount(4)
   const deltas = page.locator('.participant-row input[type=number]')
   await deltas.nth(0).fill('2')
   await expect(deltas.nth(0)).toHaveValue('2')
@@ -53,8 +53,8 @@ test('ana form klavye odağını şehirden mekân türüne taşır', async ({ pa
 test('hatalı bağlantı öneri akışını durdurur', async ({ page }) => {
   let scenarios = 0
   page.on('request', (request) => { if (request.url().endsWith('/api/scenarios')) scenarios++ })
-  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
-  for (const input of await page.getByLabel('Link veya koordinat', { exact: true }).all()) await input.fill('invalid-location')
+  await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
+  for (const input of await page.getByLabel('Yer adı, link veya koordinat', { exact: true }).all()) await input.fill('invalid-location')
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
   await expect(page.locator('.parse-status.fail')).toHaveCount(3)
   expect(scenarios).toBe(0)
@@ -161,7 +161,7 @@ test('değişen kişi konumu eski rotalarla sıralanmaz', async ({ page }) => {
   page.on('request', (request) => { if (request.url().endsWith('/api/routes/matrix')) routes++ })
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
   await expect(page.locator('.recommendation-card')).toHaveCount(3)
-  await page.getByLabel('Link veya koordinat', { exact: true }).nth(0).fill('39.95,32.88')
+  await page.getByLabel('Yer adı, link veya koordinat', { exact: true }).nth(0).fill('39.95,32.88')
   await expect(page.locator('.recommendation-card')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Güncelle', exact: true })).toBeDisabled()
   await previewPreference(page)
@@ -216,7 +216,7 @@ test('açık ve koyu tema, klavye, taşma', async ({ page }, testInfo) => {
     const current = await page.locator('html').getAttribute('data-theme')
     if (current !== theme) await page.getByRole('button', { name: /temaya geç/ }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
-    await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
+    await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
     const overflowing = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)
     expect(overflowing).toBe(false)
     await page.screenshot({ path: testInfo.outputPath(`${theme}.png`), fullPage: true })
@@ -235,8 +235,8 @@ test('doğrulanan linkler koordinat olarak aktarılır ve delta değişince yeni
       source: 'google_geocoding', location_input_type: 'geocoded_text', error: null, delta_weight: 1 })) })
   })
   page.on('request', (request) => { if (request.url().endsWith('/api/scenarios')) scenarioPayload = request.postDataJSON() })
-  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
-  const inputs = page.getByLabel('Link veya koordinat', { exact: true })
+  await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
+  const inputs = page.getByLabel('Yer adı, link veya koordinat', { exact: true })
   for (const input of await inputs.all()) await input.fill('https://www.google.com/maps?q=Ankara')
   await page.getByRole('button', { name: 'Konumları doğrula', exact: true }).click()
   await expect(page.locator('.parse-status.pass')).toHaveCount(3)
@@ -317,8 +317,8 @@ test('her kişi kendi ulaşım biçimini seçer ve istekte kişiye göre gider',
     { label: 'Katılımcı 2', lat: 39.93, lng: 32.86, source: 'coordinate', location_input_type: 'coordinate', delta_weight: 1 },
     { label: 'Katılımcı 3', lat: 39.94, lng: 32.87, source: 'coordinate', location_input_type: 'coordinate', delta_weight: 1 }] }))
   await page.route('**/api/scenarios', async route => { body = route.request().postDataJSON(); await route.abort() })
-  await page.getByRole('button', { name: 'Link ile kişi konumu' }).click()
-  const fields = page.getByLabel('Link veya koordinat', { exact: true })
+  await page.getByRole('button', { name: 'Konumları ben gireyim' }).click()
+  const fields = page.getByLabel('Yer adı, link veya koordinat', { exact: true })
   await fields.nth(0).fill('39.92,32.85'); await fields.nth(1).fill('39.93,32.86'); await fields.nth(2).fill('39.94,32.87')
   await page.locator('.participant-row .transport-select select').first().selectOption('transit')
   await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()

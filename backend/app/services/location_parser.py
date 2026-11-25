@@ -86,6 +86,49 @@ async def _expand_short_url(value: str) -> str | None:
     return None
 
 
+class PlaceSearchUnavailable(RuntimeError):
+    pass
+
+
+def _place_result(item: dict) -> dict | None:
+    try:
+        lat = float(item["geometry"]["location"]["lat"])
+        lng = float(item["geometry"]["location"]["lng"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not _valid_coordinate(lat, lng):
+        return None
+    address = str(item.get("formatted_address", ""))[:200]
+    components = item.get("address_components") or []
+    name = str(components[0].get("long_name", "")) if components and isinstance(components[0], dict) else ""
+    return {"name": (name or address)[:120], "address": address, "lat": round(lat, 6), "lng": round(lng, 6)}
+
+
+async def search_places(query: str, limit: int = 5) -> list[dict]:
+    """Up to ``limit`` places for a typed name such as "Mogan Gölü" or "Ankara Kalesi".
+
+    One Geocoding request per explicit search; the query is never stored or logged.
+    """
+    text = " ".join(query.split())[:120]
+    if len(text) < 2:
+        raise ValueError("Aramak için en az iki karakter yazın.")
+    if COORD_RE.fullmatch(text):
+        coordinate = _coordinate_from_text(text)
+        return [{"name": text, "address": "", "lat": coordinate[0], "lng": coordinate[1]}] if coordinate else []
+    if not get_settings().has_google_key:
+        raise PlaceSearchUnavailable("Yer arama şu anda kullanılamıyor. Harita bağlantısı veya koordinat girebilirsiniz.")
+    try:
+        payload = await google_request(
+            GOOGLE_GEOCODING_URL,
+            {"address": text, "language": "tr", "region": "tr"},
+            "geocoding_location",
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise PlaceSearchUnavailable("Yer arama tamamlanamadı. Biraz sonra yeniden deneyin veya harita bağlantısı girin.") from exc
+    found = [_place_result(item) for item in payload.get("results", [])[:limit] if isinstance(item, dict)]
+    return [item for item in found if item]
+
+
 async def _geocode_text(value: str) -> tuple[float, float] | None:
     settings = get_settings()
     if not settings.has_google_key:
@@ -149,13 +192,19 @@ async def parse_location_input(item: ParticipantLocationInput) -> ParsedLocation
         source = "google_geocoding" if coordinate is not None else source
         input_type = "geocoded_text" if coordinate is not None else input_type
 
+    if coordinate is None and not is_url and not COORD_RE.search(raw_value) and len(raw_value) >= 2:
+        # A typed place name ("Ankara Kalesi"): resolve it with one Geocoding request.
+        coordinate = await _geocode_text(raw_value[:200])
+        if coordinate is not None:
+            source, input_type = "google_geocoding", "place_name"
+
     if coordinate is None:
         return ParsedLocation(
             label=label,
             source=source,
             location_input_type=input_type,
             delta_weight=item.delta_weight,
-            error="Konum çözülemedi. Google Maps linki veya lat,lng formatı kullanın.",
+            error="Konum çözülemedi. Yer adı, Google Maps linki veya enlem,boylam yazın.",
         )
 
     lat, lng = coordinate

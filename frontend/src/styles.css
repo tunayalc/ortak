@@ -1517,3 +1517,27 @@ input[type='range'] {
 .venue-picker .chips { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .venue-picker .chips label { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--text); font-size: 14px; }
 .transport-select { max-width: 14rem; }
+
+/* Starting point search and rooms */
+.place-picker { display: grid; gap: 8px; min-width: 0; }
+.place-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.place-chosen { color: var(--secondary); }
+.place-notice { color: var(--muted); }
+.place-results { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+.place-results li + li { border-top: 1px solid var(--border); }
+.place-results button { width: 100%; display: grid; gap: 2px; text-align: left; background: transparent; color: var(--text); padding: 10px 12px; min-height: 44px; }
+.place-results button:hover { background: var(--surface-low); }
+.place-results button span { color: var(--secondary); font-size: 13px; }
+.place-results .place-attribution { padding: 6px 12px; font-size: 11px; color: var(--muted); }
+.room-panel { display: grid; gap: 14px; padding: 16px; margin: 12px 0; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); min-width: 0; }
+.room-head { display: flex; align-items: center; gap: 8px; font-size: 17px; }
+.room-badge { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border-strong); border-radius: 2px; color: var(--secondary); }
+.room-share, .room-save, .saved-rooms, .room-members { display: grid; gap: 8px; min-width: 0; }
+.room-share label, .room-save label { display: grid; gap: 6px; color: var(--secondary); }
+.room-share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+a.primary, a.secondary { text-decoration: none; }
+.room-members h3, .saved-rooms h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.room-member, .saved-room { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 0; border-top: 1px solid var(--border); }
+.room-member > span:first-child, .saved-room strong { flex: 1 1 140px; font-weight: 600; }
+.room-member .pass { color: var(--success, var(--primary-text)); }
+.guest-page .pass { color: var(--success, var(--primary-text)); }

@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse
 
@@ -34,7 +35,7 @@ from .services.experiments import run_experiment
 from .services.google_maps import RouteUnavailable, build_route_matrix, search_candidates
 from .services.google_transport import capture_google_calls
 from .services.google_usage import GoogleUsageBlocked, ensure_operation_capacity, search_operations, search_capacity, usage_status
-from .services.location_parser import parse_location_inputs
+from .services.location_parser import PlaceSearchUnavailable, parse_location_inputs, search_places
 from .services.preference_interpreter import PreferenceServiceError, interpret_preferences, llm_status
 from .services.scenario import create_scenario, get_scenario
 from .services.places_catalog import normalize_categories
@@ -69,6 +70,10 @@ async def lifespan(app):
         while True:
             session_store.cleanup_expired()
             group_invites.cleanup()
+            try:
+                await asyncio.to_thread(group_invites.purge_saved_rooms)
+            except sqlite3.Error:
+                logging.getLogger(__name__).warning("Saved room cleanup unavailable; will retry.")
             try:
                 await asyncio.to_thread(cleanup_feedback)
             except sqlite3.Error:
@@ -109,7 +114,8 @@ def runtime_config(request: Request):
     return {
         "production": settings.production,
         "capabilities": {"conditions_v1": True, "plan_context_v1": True, "group_invites_v1": True,
-                         "venue_types_v1": True, "travel_modes_v1": True},
+                         "venue_types_v1": True, "travel_modes_v1": True,
+                         "place_search_v1": True, "rooms_v1": True},
         "csrf_token": request.session.get("csrf", "") if settings.production else "",
         "max_participants": settings.public_max_participants if settings.production else 12,
         "max_candidates": settings.public_max_candidates if settings.production else 12,
@@ -145,6 +151,25 @@ async def post_locations_parse(payload: LocationParseRequest) -> list[ParsedLoca
     if get_settings().production and len(payload.items) > get_settings().public_max_participants:
         raise HTTPException(400, "En fazla 8 kişi konumu girilebilir.")
     return await parse_location_inputs(payload.items)
+
+
+class PlaceSearchRequest(BaseModel):
+    query: str = Field(min_length=2, max_length=120)
+
+
+@router.post("/locations/search")
+async def post_locations_search(payload: PlaceSearchRequest) -> list[dict]:
+    """Find a starting point by name. Costs one Geocoding request, so it is rate limited as paid."""
+    try:
+        if get_settings().has_google_key:
+            ensure_operation_capacity({"geocoding_location": 1})
+        return await search_places(payload.query)
+    except GoogleUsageBlocked as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except PlaceSearchUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/preferences/interpret", response_model=PreferenceSuggestion)

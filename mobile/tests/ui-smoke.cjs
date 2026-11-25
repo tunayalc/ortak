@@ -8,6 +8,7 @@ async (page) => {
   let partial = false;
   let recommendFails = false;
   let deleteFails = false;
+  let room = null;
   const people = [1, 2, 3].map(i => ({ id: `user-${i}`, label: `Kişi ${i}`, delta_weight: 1 }));
   const candidates = [1, 2, 3].map(i => ({ id: `p${i}`, place_id: `test-place-${i}`, name: `Test Kafe ${i}`, address: 'Kurgusal test adresi', rating: 4 + i / 10, review_count: i * 10, price_level: i === 1 ? null : i, provider: 'google', attributions: [] }));
   const scenario = { id: 'test-scenario', city: 'Ankara', category: 'cafe', session_only: true, users: people };
@@ -18,7 +19,7 @@ async (page) => {
     counts[path] = (counts[path] || 0) + 1;
     const body = req.postDataJSON();
     if (path === '/mobile/session') return fulfill(route, { access_token: 'ui-test-only', token_type: 'Bearer', expires_in: 7200 });
-    if (path === '/runtime-config') return fulfill(route, { capabilities: { conditions_v1: true, plan_context_v1: true, group_invites_v1: false, venue_types_v1: true, travel_modes_v1: true }, production: true, max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: capacity, google_unavailable_reason: 'Test kotası kapalı.', google_search_capacity: { resolved_coordinates: { 3: { available: capacity, reason: capacity ? '' : 'Test kotası kapalı.' } } } });
+    if (path === '/runtime-config') return fulfill(route, { capabilities: { conditions_v1: true, plan_context_v1: true, group_invites_v1: true, venue_types_v1: true, travel_modes_v1: true, place_search_v1: true, rooms_v1: true }, production: true, max_participants: 8, max_candidates: 3, max_k: 3, session_ttl_seconds: 7200, google_available: capacity, google_unavailable_reason: 'Test kotası kapalı.', google_search_capacity: { resolved_coordinates: { 3: { available: capacity, reason: capacity ? '' : 'Test kotası kapalı.' } } } });
     if (path === '/health') return fulfill(route, { status: 'ok', ai_ready: true, ai_provider: 'ollama', ai_model: 'llama3:8b', ai_status: 'ready' });
     if (path === '/locations/parse') return fulfill(route, body.items.map(p => ({ ...p, lat: p.value.includes('hatalı') ? null : 39.92, lng: 32.85, error: p.value.includes('hatalı') ? 'Test: konum çözülemedi.' : null })));
     if (path === '/preferences/interpret') {
@@ -33,6 +34,19 @@ async (page) => {
       if (recommendFails) return fulfill(route, { detail: 'Test: geçici sunucu hatası.' }, 503);
       return fulfill(route, { scenario, valid_alternatives: 3, criterion_weights: body.criterion_weights, recommendations: body.min_rating > 4.3 ? [] : candidates.map((candidate, i) => ({ rank: i + 1, candidate, score: 0.8 - i / 10, t_avg_minutes: 12, t_max_minutes: 18, directions_url: 'https://www.google.com/maps/dir/?api=1&destination=39.92,32.85&origin=private', cost_source: i ? 'google_price_level' : 'unknown', constraint_status: { complete_route_matrix: true }, per_user: people.map(p => ({ user_id: p.id, label: p.label, raw_duration_minutes: 12, distance_km: 1.5 })), score_breakdown: { rating_component: 0.2, cost_component: 0.3, proximity_component: 0.3, proximity_contributions: people.map(p => ({ user_id: p.id, label: p.label, weight: 1 / 3, distance_km: 1.2 })) } })) });
     }
+    if (path === '/locations/search') {
+      check(body.query === 'Mogan Gölü', 'Place search sends only the typed text');
+      return fulfill(route, [{ name: 'Mogan Gölü', address: 'Gölbaşı/Ankara', lat: 39.773, lng: 32.79 }]);
+    }
+    if (path === '/groups/mine' && req.method() === 'GET') return fulfill(route, room);
+    if (path === '/groups/mine' && req.method() === 'DELETE') { room = null; return route.fulfill({ status: 204 }); }
+    if (path === '/groups' && req.method() === 'POST') {
+      check(body.room === true && body.name === 'Cuma ekibi', 'Room is created with its name');
+      room = { room: true, name: body.name, saved: false, join: 'J'.repeat(43), capacity: 8, choices: [], expires_in: 7000, seats: people.map((p, i) => ({ name: p.label, ready: true, travel_mode: i === 0 ? 'transit' : null })) };
+      return fulfill(route, room);
+    }
+    if (path === '/groups/save') { room = { ...room, saved: true, name: body.name, owner_key: 'K'.repeat(43) }; return fulfill(route, room); }
+    if (path === '/groups/locations') return fulfill(route, people.map((p, i) => ({ lat: 39.9 + i / 100, lng: 32.8, label: p.label, travel_mode: i === 0 ? 'transit' : null })));
     if (path === '/mobile/feedback') {
       check(Object.keys(body).sort().join(',') === 'criterion_weights,reason', 'AI report excludes prompt and personal data');
       return fulfill(route, { id: 'test-feedback' }, 201);
@@ -53,17 +67,36 @@ async (page) => {
   await page.getByRole('radio', { name: 'Sistem', exact: true }).click();
   check(await page.getByRole('radio', { name: 'Sistem', exact: true }).isChecked(), 'System appearance can be restored');
   await page.getByRole('tab', { name: 'Buluşma', exact: true }).click();
+  await page.getByRole('radio', { name: 'Oda kur', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Oda adı', exact: true }).fill('Cuma ekibi');
+  await page.getByRole('button', { name: 'Oda kur', exact: true }).click();
+  await page.getByRole('button', { name: 'Oda bağlantısını paylaş', exact: true }).waitFor();
+  check(await page.getByText('Katılanlar (3/8), konum ekleyen: 3', { exact: true }).isVisible(), 'Host sees who joined the room');
+  await page.getByRole('textbox', { name: 'Sık buluşuyorsanız odayı kaydedin', exact: true }).fill('Cuma ekibi');
+  await page.getByRole('button', { name: 'Odayı kaydet', exact: true }).click();
+  await page.getByText(/Oda kaydedildi/).waitFor();
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ortak-rooms') || '[]'));
+  check(stored.length === 1 && stored[0].name === 'Cuma ekibi' && stored[0].join === 'J'.repeat(43), 'Saved room kept on device with its link');
+  await page.getByRole('button', { name: 'Konumları kişi listesine aktar', exact: true }).click();
+  await page.getByText(/3 kişinin konumu listeye aktarıldı/).waitFor();
+  check(await page.getByRole('textbox', { name: '1. kişinin konumu', exact: true }).inputValue() === '39.9,32.8', 'Room points fill the person list');
+  await page.getByRole('button', { name: 'Bu buluşmayı bitir', exact: true }).click();
+  await page.getByRole('heading', { name: 'Kayıtlı odalarım' }).waitFor();
+  check(await page.getByRole('button', { name: 'Cuma ekibi odasını aç', exact: true }).isVisible(), 'Saved room can be reopened later');
+  await page.getByRole('radio', { name: 'Ben gireyim', exact: true }).click();
   await page.getByRole('button', { name: 'Kafe', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Paintball ve macera sporları', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Bowling', exact: true }).click();
   check(await page.getByText('Mekân veya etkinlik türü (3/5)', { exact: true }).isVisible(), 'Several venue types can be selected');
-  await page.getByRole('radio', { name: 'Toplu taşıma', exact: true }).nth(1).click();
-  check(await page.getByRole('radio', { name: 'Toplu taşıma', exact: true }).nth(1).isChecked(), 'A person can pick public transport');
+  check(await page.getByRole('radio', { name: 'Toplu taşıma', exact: true }).nth(1).isChecked(), 'Imported room member keeps public transport');
   await page.getByRole('textbox', { name: '1. kişinin konumu', exact: true }).fill('hatalı link');
   await page.getByRole('textbox', { name: '2. kişinin konumu', exact: true }).fill('39.93,32.86');
-  await page.getByRole('textbox', { name: '3. kişinin konumu', exact: true }).fill('39.94,32.87');
-  await page.getByRole('checkbox', { name: /^Bu kişilerin/ }).click();
-  check(await page.getByRole('checkbox', { name: /^Bu kişilerin/ }).isChecked(), 'Consent checked state is accessible');
+  await page.getByRole('textbox', { name: '3. kişinin konumu', exact: true }).fill('Mogan Gölü');
+  await page.getByRole('button', { name: 'Yer adıyla ara', exact: true }).nth(2).click();
+  await page.getByRole('button', { name: 'Mogan Gölü, Gölbaşı/Ankara', exact: true }).click();
+  check(await page.getByRole('textbox', { name: '3. kişinin konumu', exact: true }).inputValue() === '39.773,32.79', 'Picked place fills coordinates');
+  check(await page.getByText('Seçilen: Mogan Gölü, Gölbaşı/Ankara', { exact: true }).isVisible(), 'Picked place name is shown');
+  check(await page.getByRole('checkbox', { name: /^Bu kişilerin/ }).count() === 0, 'No extra location consent after the first-launch notice');
   await page.getByRole('button', { name: 'Konumları doğrula', exact: true }).click();
   await page.getByText('Test: konum çözülemedi.', { exact: true }).waitFor();
   check(!counts['/scenarios'], 'Invalid location never creates scenario');
@@ -74,7 +107,7 @@ async (page) => {
   check(await page.getByRole('tab', { name: 'Tercihler', exact: true }).getAttribute('aria-selected') === 'true', 'Selected tab state is accessible');
   check(await page.getByRole('radio', { name: 'Dengeli', exact: true }).isChecked(), 'Selected criterion profile state is accessible');
   await page.getByRole('textbox', { name: 'Buluşma tercihiniz' }).fill('Fiyat önemli; Kişi 1 iki kat önemli.');
-  await page.getByRole('checkbox', { name: /^Tercih metnimin/ }).click();
+  check(await page.getByRole('checkbox', { name: /^Tercih metnimin/ }).count() === 0, 'No extra AI consent after the first-launch notice');
   await page.getByRole('button', { name: 'Tercih önerisi oluştur' }).click();
   await page.getByRole('heading', { name: 'Öneriyi incele' }).waitFor();
   check(await page.getByText('Puan %34, Fiyat %33, Yakınlık %33', { exact: true }).count() === 1, 'AI preview does not mutate criteria');

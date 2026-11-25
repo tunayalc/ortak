@@ -3,7 +3,7 @@ import { normalizeWeights, participantWeights } from './domain';
 import type { PlanBrief, PlanInterpretation, PlanResult } from './planner';
 import { conditionLines, validateConditions } from './conditions';
 import type { UserConditions } from './types';
-import type { Group } from './types';
+import type { Group, PlaceResult, RoomPoint } from './types';
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -76,7 +76,14 @@ export function createApi(baseUrl: string, send: typeof fetch = fetch, now = Dat
     group: () => request<Group|null>('/groups/mine'),
     createGroup: (size:number) => request<Group>('/groups', {size}),
     closeGroup: () => request<void>('/groups/mine', undefined, 'DELETE'),
-    groupLocations: () => request<{lat:number;lng:number}[]>('/groups/locations', {}),
+    groupLocations: () => request<RoomPoint[]>('/groups/locations', {}),
+    createRoom: (name:string) => request<Group>('/groups', {room:true, name}),
+    saveRoom: (name:string) => request<Group>('/groups/save', {name}),
+    renameRoom: (name:string) => request<Group>('/groups/rename', {name}),
+    openRoom: (key:string) => request<Group>('/groups/open', {key}),
+    forgetRoom: (key:string) => request<void>('/groups/forget', {key}),
+    removeMember: (seat:number) => request<Group>('/groups/remove', {seat}),
+    searchPlaces: (query:string) => request<PlaceResult[]>('/locations/search', {query: query.trim()}),
     groupBallot: (scenario_id:string, candidates:string[]) => request<Group>('/groups/ballot',{scenario_id,candidates}),
     connect,
     expiresAt: () => expiresAt,

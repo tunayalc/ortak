@@ -24,6 +24,10 @@ def reserve_rate_limits(settings: Settings, session_id: str, ip: str, path: str)
     limits = [("requests", 60, 60)]
     if path in {"/locations/parse", "/scenarios", "/candidates/search", "/routes/matrix"}:
         limits.append(("paid", 60, 6))
+    if path == "/locations/search":
+        limits.extend([("place_search", 60, 12), ("place_search_day", 86400, 200)])
+    if path == "/groups/join":
+        limits.append(("lobby_join", 600, 20))
     if path in {"/preferences/interpret", "/plans/interpret"}:
         limits.extend([("llm", 60, 3), ("llm_day", 86400, 20)])
     if path == "/mobile/session":

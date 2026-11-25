@@ -14,7 +14,6 @@ test.beforeEach(async ({ page }) => {
 async function openPlan(page) {
   await page.getByRole('button', { name: 'Buluşma planı', exact: true }).click()
   await page.getByLabel('Buluşmayı anlat').fill('Dört kişi toplam 2000 TL, müze olmasın.')
-  await page.getByRole('checkbox', { name: /Metnimin sunucudaki Llama/ }).check()
 }
 
 async function overrideRuntime(page, changes) {

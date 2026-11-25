@@ -2,6 +2,14 @@
 
 ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalışan kontrollü bir betadır. Bu kılavuz hazırlık, kurulum, test, izleme ve kurtarma adımlarını kapsar. Kodun GitHub'a gönderilmesi tek başına sunucu kabulü değildir; aşağıdaki kayıtlar gerçek sunucu kanıtlarını ayrı gösterir.
 
+## 25 Kasım 2026: Odalar, Kayıtlı Odalar, Yer Adıyla Arama
+
+- Web ve API Oracle'da `2b9b11a` sürümüne alındı (API `sha256:682afc5d…`, web `sha256:062a983d…`). Önceki imajlar (`a574dc37…`, `42220546…`) geri dönüş için sunucuda tutuldu; yayın betiği `.env`, kurulum planı ve sürüm kayıtlarını yedekledi, Google kullanım kaydı korundu. Ollama değişmedi. Veritabanına yalnızca `saved_rooms` ve `saved_room_members` tabloları eklendi.
+- Yeni özellikler: tek bağlantılı oda (bağlantıyı açan adını yazıp kendi başlangıç noktasını ve ulaşım biçimini ekler; düzenleyen kimin hazır olduğunu görür, kişi çıkarır, hazır konumları listeye aktarır), sık buluşan gruplar için adıyla kayıtlı oda (yalnızca oda adı, üye adları ve ulaşım tercihi; konum yok; 90 gün kullanılmazsa silinir; bağlantı ve anahtarlar hash), yer adıyla arama (arama başına bir Geocoding çağrısı, ayrı hız sınırı), konum alanına doğrudan yer adı yazma, web'de "Konumum". İlk açılış bildirimi `2026-11-25` sürümüne geçti; ekstra konum ve Llama onay kutuları kaldırıldı. Kişiye özel eski davetler 0.3.0 ve öncesi uygulamalar için çalışmaya devam eder.
+- Canlı kabul (`ortak.web.tr`, kurgusal kişi): yeni bildirim ilk açılışta gösterildi; "Ankara Kalesi" araması `39.939756,32.866264` (Kale, Altındağ) döndürdü; ekstra onay kutusu yok; oda kuruldu, ikinci tarayıcı bağlantıyla katılıp cihaz konumunu kaydetti, düzenleyen bunu otomatik yenilemeyle gördü; oda kaydedildi, buluşma bitirildi, kayıtlı oda aynı bağlantıyla ve konumsuz açıldı; kayıt silindi ve bağlantı geçersizleşti. Çağrılar: 1 Geocoding; Places/Routes yok.
+- Yayın için Oracle güvenlik listesine yalnızca yönetici IP'sine `/32` geçici SSH kuralı eklendi ve yayından sonra silindi; dışarıdan SSH'nin kapandığı doğrulandı. Kalıcı SSH kuralı, Google kullanım sınırları ve harcama ayarları değiştirilmedi.
+- iOS `0.4.0 (4)` dSYM'lerle App Store Connect'e yüklendi. Vercel geri dönüş dağıtımı güncellenmedi.
+
 ## 24 Kasım 2026: Etkinlik Türleri, Kişi Bazlı Ulaşım ve İlk Açılış Onayı
 
 - Web ve API Oracle'da `51b1934` sürümüne alındı (API `sha256:a574dc37…`, web `sha256:42220546…`). Önceki imajlar geri dönüş için sunucuda tutuldu; yayın betiği `.env`, kurulum planı ve sürüm kayıtlarını yedekledi, Google kullanım kaydı korundu. Ollama değişmedi.

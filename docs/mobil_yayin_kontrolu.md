@@ -22,7 +22,7 @@ hukuki uygunluk garantisi değildir. Kurallar başvuru gününde yeniden kontrol
 | Kısmen doğrulandı | Mobil API'nin Oracle'a kontrollü yüklenmesi | `51b1934` canlı; `/runtime-config` mekân türü ve kişi bazlı ulaşım yeteneklerini bildiriyor. Gerçek cihazdan bildirim ve öneri akışı bekliyor |
 | Tamamlandı | Mobil gizlilik ve kullanım koşulları | `https://ortak.web.tr/mobile-privacy.html` ve `https://ortak.web.tr/mobile-terms.html` herkese açık HTTPS 200 |
 | Kısmen doğrulandı | Apple Developer ve Play Console doğrulamaları | Apple Developer aktif, `com.tunayalc.ortak` kayıtlı. Play kimlik onaylı; gerçek Android cihaz ve telefon doğrulamaları bekliyor, uygulama oluşturma kapalı |
-| Tamamlandı | Mağaza imzalama | Android yükleme anahtarı ve Apple Distribution özel anahtarı yerelde. iOS `0.4.0 (4)` Xcode'daki hesapla otomatik imzalandı (Xcode yönetimli App Store profili). Android `0.4.0 (4)` imzasız AAB hazır; `output/mobile/next-0.4.0/sign-aab.sh` şifreyi Terminal'de sorarak yükleme anahtarıyla imzalar |
+| Tamamlandı | Mağaza imzalama | Android yükleme anahtarı ve Apple Distribution özel anahtarı yerelde. iOS `0.4.0 (5)` Xcode'daki hesapla otomatik imzalandı (Xcode yönetimli App Store profili). Android `0.4.0 (5)` imzasız AAB hazır; `output/mobile/next-0.4.0-5/sign-aab.sh` şifreyi Terminal'de sorarak yükleme anahtarıyla imzalar |
 | Bekliyor | Gerçek iPhone, iPad, Android testleri | İzin verilmesi/reddi, yaklaşık konum, ayarlar dönüşü, süreç sonlandırma, TTL, paylaşım, ekran okuyucu, büyük yazı, rotasyon |
 | Tamamlandı | iOS simülatör açılışı | iPhone 18 Pro ve iPad Pro 13 inç (M5) üzerinde `0.1.0 (1)` açıldı. `output/mobile/app-store/` altındaki iki görsel App Store Connect'e yüklendi |
 | Tamamlandı | Android yerel açılış ve ana akış | API 36 ARM64 emülatörde dağıtım AAB'sinden üretilen test APK'sı açıldı. İki motorun ekranları yakalandı. Canlı mobil API'de oturum, Google arama kapasitesi ve ücretsiz plan isteği doğrulandı; bu mobil kontrolde Google çağrısı yapılmadı |
@@ -30,13 +30,13 @@ hukuki uygunluk garantisi değildir. Kurallar başvuru gününde yeniden kontrol
 | Bekliyor | Gerçek mobil uçtan uca kabul | Cihazda Llama önizleme/onay ve tam Google matrisi; kayıtlı harcama onayı/kota korunarak ayrı test |
 | Kısmen tamamlandı | Mağaza metaverileri | Apple metinleri, `13+` yaş derecelendirmesi, gizlilik, içerik hakları ve görseller kayıtlı. Play metni, ikon, tanıtım görseli ve iki güncel Android ekranı `output/mobile/google-play/` altında; yükleme hesap doğrulamasını bekliyor |
 | Hesaba bağlı | Google kapalı test | Yeni kişisel hesaplarda en az 12 testçi, kesintisiz 14 günlük katılım; ardından üretim erişimi başvurusu [1] |
-| Yayında / incelemede | App Store | iOS `0.1.0 (1)` 23 Kasım 2026'dan beri Türkiye App Store'da yayında. `0.3.0 (3)` 25 Kasım'da incelemeye gönderildi (`Waiting for Review`), onay sonrası otomatik yayınlanır. `0.4.0 (4)` (odalar, yer adıyla arama) 25 Kasım'da App Store Connect'e yüklendi; incelemeye henüz gönderilmedi. TestFlight'ta `ORTAK iPhone QA` iç grubunda. Hazır React Native çatılarının dSYM uyarısı için `mobile/scripts/add-prebuilt-dsyms.sh` eklendi; `0.3.0` arşivinde semboller yerelde tamam |
+| Yayında / incelemede | App Store | iOS `0.1.0 (1)` 23 Kasım 2026'dan beri Türkiye App Store'da yayında. `0.3.0 (3)` 25 Kasım'da onaylandı (`Ready for Distribution`, otomatik yayın). `0.4.0 (5)` (odalar, yer adıyla arama, Deniz teması, yeni simge) 25 Kasım'da incelemeye gönderildi (`Waiting for Review`); yenilik ve inceleme notları 0.4.0'a göre güncellendi. TestFlight'ta `ORTAK iPhone QA` iç grubunda. Hazır React Native çatılarının dSYM uyarısı için `mobile/scripts/add-prebuilt-dsyms.sh` eklendi; `0.3.0` arşivinde semboller yerelde tamam |
 
 Yayımlama paketleri `output/mobile/` altında ve Git dışında tutulur.
 `ortak-android-0.1.0-upload-ready.aab` yükleme anahtarıyla imzalıdır.
 `ORTAK-iOS-0.1.0-1.ipa` imzalı App Store paketidir.
 `ORTAK-0.1.0-unsigned.xcarchive` kaynak Xcode arşividir.
-`output/mobile/ios-0.4.0-4/` iOS `0.4.0 (4)` arşivini, `output/mobile/next-0.4.0/` Android `0.4.0 (4)` paketini ve imzalama betiğini içerir. `0.3.0` çıktıları önceki klasörlerde durur.
+`output/mobile/ios-0.4.0-5/` iOS `0.4.0 (5)` arşivini, `output/mobile/next-0.4.0-5/` Android `0.4.0 (5)` paketini ve imzalama betiğini içerir. `0.3.0` çıktıları önceki klasörlerde durur.
 Android paketi yüklenmedi. Canlı web ve mobil API
 doğrulamaları mağaza yayını veya fiziksel cihaz kabulü yerine geçmez. Satıcı beyanı ekranı
 geliştirici e-postasının, yasal ad ve adresin ve geliştirici telefonunun herkese

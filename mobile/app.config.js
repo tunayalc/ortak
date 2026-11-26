@@ -2,7 +2,7 @@ module.exports = {
   expo: {
     name: 'ORTAK',
     slug: 'ortak-mobile',
-    version: '0.4.0',
+    version: '0.4.1',
     scheme: 'ortak',
     userInterfaceStyle: 'automatic',
     icon: './assets/icon.png',

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy, DoorOpen, Save, Share2, Trash2, UserMinus, Users } from 'lucide-react'
 import { api } from './api'
-import { PlacePicker } from './LocationTools'
+import { PlacePicker, WeightSelect } from './LocationTools'
 import { travelModes } from './planner'
 import { forgetRoom, forgetSeat, rememberRoom, rememberSeat, renameSavedRoom, roomLink, savedRooms, seatFor } from './rooms'
 
@@ -34,13 +34,14 @@ function ShareLink({ link, name, onNotice }) {
   </div>
 }
 
-/** Host side of a room: create or reopen, share one link, watch who added a point, import. */
-export function RoomHost({ result, onImport, disabled }) {
+/** Host side of a room: create or reopen, share one link. Members add their own name and starting point;
+ * the host only sets each member's weight. Ready members are synced into the search automatically. */
+export function RoomHost({ result, people, onSync, onWeight, disabled }) {
   const [room, setRoom] = useState(null), [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState('')
   const [rooms, setRooms] = useState(savedRooms), [name, setName] = useState(''), [saveName, setSaveName] = useState('')
   const [openedKey, setOpenedKey] = useState('')
-  const busyRef = useRef(false)
+  const busyRef = useRef(false), synced = useRef('')
   async function run(fn) {
     if (busyRef.current) return
     busyRef.current = true; setBusy(true); setNotice('')
@@ -58,12 +59,27 @@ export function RoomHost({ result, onImport, disabled }) {
 
   const local = rooms.find(r => r.key === openedKey)
   const join = room?.join || local?.join
-  const ready = room?.seats.filter(s => s.ready).length || 0
+  const readySeats = room?.seats.filter(s => s.ready) || []
+  const ready = readySeats.length
+  const signature = room ? readySeats.map(s => `${s.name}|${s.travel_mode || ''}`).join(';') : ''
+  const outdated = Boolean(room && signature !== synced.current)
   const ids = result?.recommendations.slice(0,3).map(x => x.candidate.id) || []
+
+  async function sync() {
+    const points = ready >= 2 ? await api.groupLocations() : []
+    synced.current = signature
+    onSync(points)
+  }
+  // Keep the search list in step with the room, but never swap locations under existing results.
+  useEffect(() => {
+    if (!outdated || disabled || result || busyRef.current) return
+    void run(sync)
+  }, [signature, disabled, Boolean(result)])
+  useEffect(() => { if (!room) { synced.current = ''; onSync(null) } }, [Boolean(room)])
 
   if (!loaded) return <section className="room-panel"><p>Oda bilgisi yükleniyor…</p><p role="status">{notice}</p></section>
   if (!room) return <section className="room-panel">
-    <p>Tek bir bağlantı oluşturun ve grubunuzla paylaşın. Bağlantıyı açan herkes adını yazıp kendi başlangıç noktasını ekler; siz kimin eklediğini görür, hazır olanları listeye aktarırsınız.</p>
+    <p>Bir bağlantı oluşturup grubunuzla paylaşın. Bağlantıyı açan herkes <strong>kendi adını ve başlangıç noktasını</strong> kendisi girer. Siz yalnızca kişilerin ağırlığını seçersiniz.</p>
     <fieldset className="group-actions" disabled={disabled || busy}>
       <label>Oda adı<input placeholder="Örn. Cuma ekibi" value={name} maxLength={40} onChange={e => setName(e.target.value)} /></label>
       <button type="button" className="primary" onClick={() => run(async () => { const created = await api.createRoom(name.trim() || 'Oda'); setOpenedKey(''); setRoom(created); setSaveName(created.name) })}><DoorOpen size={16} /> Oda kur</button>
@@ -78,21 +94,34 @@ export function RoomHost({ result, onImport, disabled }) {
       </div>}
     </fieldset><p role="status">{notice}</p></section>
 
+  let readyIndex = -1
   return <section className="room-panel">
     <div className="room-head"><Users size={18} /><strong>{room.name}</strong>{room.saved && <span className="room-badge">Kayıtlı</span>}</div>
     {join ? <ShareLink link={roomLink(join)} name={room.name} onNotice={setNotice} /> : <p className="error">Bu odanın bağlantısı bu cihazda yok.</p>}
-    <p className="privacy-note">Siz de bu bağlantıyı açıp odaya katılabilirsiniz. Üyeler birbirinin konumunu görmez.</p>
+    <p className="privacy-note">Siz de bu bağlantıyı açıp kendi yerinizi ekleyebilirsiniz. Üyeler birbirinin konumunu görmez.</p>
     <fieldset className="group-actions" disabled={disabled || busy}>
       <div className="room-members" aria-live="polite">
         <h3>Katılanlar ({room.seats.length}/{room.capacity}) · Konum ekleyen: {ready}</h3>
         {!room.seats.length && <p>Henüz kimse katılmadı. Bağlantıyı paylaşın.</p>}
-        {room.seats.map((s, i) => <div className="room-member" key={i}>
-          <span>{s.name}</span>
-          <span className={s.ready ? 'pass' : ''}>{s.ready ? 'Konum eklendi' : 'Konum bekleniyor'}{s.travel_mode ? ` · ${modeName(s.travel_mode)}` : ''}</span>
-          {!room.choices.length && <button type="button" className="secondary" aria-label={`${s.name} kişisini odadan çıkar`} onClick={() => run(async () => setRoom(await api.removeMember(i + 1)))}><UserMinus size={16} /></button>}
-        </div>)}
+        {room.seats.map((s, i) => {
+          if (s.ready) readyIndex += 1
+          const person = s.ready && people?.[readyIndex]?.label === s.name ? people[readyIndex] : null
+          const index = readyIndex
+          return <div className="room-member" key={i}>
+            <div><strong>{s.name}</strong>
+              <span className={s.ready ? 'pass' : ''}>{s.ready ? 'Konum eklendi' : 'Konum bekleniyor'}{s.travel_mode ? ` · ${modeName(s.travel_mode)}` : ''}</span></div>
+            {person && <WeightSelect name={s.name} value={person.delta_weight} onChange={value => onWeight(index, value)} />}
+            {!room.choices.length && <button type="button" className="secondary icon-only" aria-label={`${s.name} kişisini odadan çıkar`} onClick={() => run(async () => setRoom(await api.removeMember(i + 1)))}><UserMinus size={16} /></button>}
+          </div>
+        })}
+        {room.seats.length > 0 && <small>Ağırlığı yüksek kişiye yakın yerler öne çıkar.</small>}
       </div>
-      <button type="button" className="primary" disabled={ready < 2 || !!result} onClick={() => run(async () => { onImport(await api.groupLocations()); setNotice(`${ready} kişinin konumu listeye aktarıldı. Henüz arama yapılmadı.`) })}>Konumları kişi listesine aktar</button>
+      {ready < 2 && room.seats.length > 0 && <p className="privacy-note">Arama için en az iki kişinin konum eklemesi gerekiyor.</p>}
+      {outdated && result && <div className="room-outdated"><p>Odaya yeni konum eklendi. Güncel konumlarla aramak için listeyi yenileyin; mevcut sonuçlar temizlenir.</p>
+        <button type="button" className="secondary" onClick={() => run(sync)}>Konumları güncelle</button></div>}
+      {!room.choices.length && ids.length >= 2 && <button type="button" className="secondary" onClick={() => run(async () => setRoom(await api.groupBallot(result.scenario.id, ids)))}>Sonuçları odada oylamaya aç</button>}
+      <Votes choices={room.choices}/>
+      <details className="room-more"><summary>Oda ayarları</summary>
       {!room.saved ? <div className="room-save">
         <label>Sık buluşuyorsanız odayı kaydedin<input placeholder="Oda adı" value={saveName} maxLength={40} onChange={e => setSaveName(e.target.value)} /></label>
         <button type="button" className="secondary" disabled={!saveName.trim()} onClick={() => run(async () => {
@@ -109,9 +138,8 @@ export function RoomHost({ result, onImport, disabled }) {
           if (openedKey) { renameSavedRoom(openedKey, renamed.name); setRooms(savedRooms()) }
         })}>Adı değiştir</button>
       </div>}
-      {!room.choices.length && <button type="button" className="secondary" disabled={ids.length < 2} onClick={() => run(async () => setRoom(await api.groupBallot(result.scenario.id, ids)))}>Sonuçları odada oylamaya aç</button>}
-      <Votes choices={room.choices}/>
       <button type="button" className="secondary" onClick={() => run(async () => { await api.closeGroup(); setRoom(null); setOpenedKey(''); setNotice(room.saved ? 'Buluşma bitti; oda kayıtlı kalıyor.' : 'Oda kapatıldı.') })}>{room.saved ? 'Bu buluşmayı bitir' : 'Odayı kapat'}</button>
+      </details>
     </fieldset><p role="status">{notice}</p></section>
 }
 

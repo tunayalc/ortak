@@ -95,8 +95,9 @@ export function useMeeting() {
     const fresh = await api.runtime(); setConfig(fresh);
     try {
       const found = await session.run(input, preferences, fresh, step => setBusy(labels[step]));
-      setResults(found); setResultSignature(signature);
+      setResults(found); setResultSignature(signature); setParsed([]);
     } finally {
+      if (session.lastParsed.some(p => p.error)) setParsed(session.lastParsed);
       try { setConfig(await api.runtime()); } catch { /* Preserve the original operation error. */ }
     }
   });

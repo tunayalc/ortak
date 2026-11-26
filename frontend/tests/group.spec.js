@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { acceptConsent } from './helpers.js'
 
-test('oda: tek bağlantı, adla katılım, yer arama ve cihaz konumu, aktarım, oylama, kaydetme', async ({ page, browser }) => {
+test('oda: herkes kendi adı ve yeriyle katılır, yönetici yalnızca ağırlık seçer, oylama, kaydetme', async ({ page, browser }) => {
   await acceptConsent(page)
-  let routes = 0
-  page.on('request', r => { if (r.url().endsWith('/routes/matrix')) routes++ })
+  let routes = 0, scenario
+  page.on('request', r => { if (r.url().endsWith('/routes/matrix')) routes++; if (r.url().endsWith('/api/scenarios') && r.method() === 'POST') scenario = r.postDataJSON() })
   await page.goto('/')
   await page.getByRole('button', { name: 'Oda kur', exact: true }).click()
   await page.getByLabel('Oda adı', { exact: true }).fill('Cuma ekibi')
@@ -47,14 +47,15 @@ test('oda: tek bağlantı, adla katılım, yer arama ve cihaz konumu, aktarım, 
 
     await expect(page.getByText('Katılanlar (2/8) · Konum ekleyen: 2')).toBeVisible({ timeout: 10_000 })
     await expect(page.getByText('Konum eklendi · Toplu taşıma')).toBeVisible()
-    await page.getByRole('button', { name: 'Konumları kişi listesine aktar' }).click()
-    const labels = page.locator('.participant-row label:has-text("Kişi") input').first()
-    await expect(labels).toHaveValue('Ayşe')
-    await expect(page.getByLabel('Yer adı, link veya koordinat', { exact: true })).toHaveCount(2)
-    await expect(page.getByLabel('Yer adı, link veya koordinat', { exact: true }).nth(1)).toHaveValue('39.93,32.86')
+    // The host does not type names or places; only the weights are theirs.
+    await expect(page.getByLabel('Yer adı, link veya koordinat', { exact: true })).toHaveCount(0)
+    await page.getByLabel('Ayşe ağırlığı').selectOption('2')
+    await expect(page.getByLabel('Burak ağırlığı')).toHaveValue('1')
     expect(routes).toBe(0)
-    await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+    await page.getByRole('button', { name: 'Buluşma yerini bul', exact: true }).click()
     await expect(page.locator('.recommendation-card')).toHaveCount(3)
+    expect(scenario.participant_locations.map(p => [p.label, p.value, p.delta_weight, p.travel_mode])).toEqual([
+      ['Ayşe', '39.92,32.85', 2, 'transit'], ['Burak', '39.93,32.86', 1, null]])
     await page.getByRole('button', { name: 'Sonuçları odada oylamaya aç' }).click()
     await expect(page.getByRole('heading', { name: 'Grup oyları' })).toBeVisible()
     await first.getByRole('button', { name: 'Durumu yenile' }).click()
@@ -63,6 +64,7 @@ test('oda: tek bağlantı, adla katılım, yer arama ve cihaz konumu, aktarım, 
     expect(routes).toBe(1)
 
     // Save the room, end the meeting, reopen it from the saved list.
+    await page.getByText('Oda ayarları', { exact: true }).click()
     await page.getByLabel('Sık buluşuyorsanız odayı kaydedin').fill('Cuma ekibi')
     await page.getByRole('button', { name: 'Odayı kaydet' }).click()
     await expect(page.getByText('Kayıtlı', { exact: true })).toBeVisible()
@@ -76,6 +78,7 @@ test('oda: tek bağlantı, adla katılım, yer arama ve cihaz konumu, aktarım, 
     await expect(first.getByRole('button', { name: 'Başlangıç noktamı kaydet' })).toBeVisible()
 
     page.once('dialog', dialog => dialog.accept())
+    await page.getByText('Oda ayarları', { exact: true }).click()
     await page.getByRole('button', { name: 'Bu buluşmayı bitir' }).click()
     await page.getByRole('button', { name: 'Cuma ekibi kaydını sil' }).click()
     await expect(page.getByText('Oda kaydı silindi.')).toBeVisible()

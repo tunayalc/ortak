@@ -47,6 +47,8 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [locating, setLocating] = useState<number | null>(null);
   const [entry, setEntry] = useState('Ben gireyim');
+  const [advanced, setAdvanced] = useState(false);
+  const roomMode = Boolean(m.config?.capabilities?.rooms_v1) && entry === 'Oda kur';
   const [reportOpen, setReportOpen] = useState(false);
   const [privateCover, setPrivateCover] = useState(false);
   useEffect(() => {
@@ -107,20 +109,23 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
           <View style={{ display: engine === 'Mekân bul' ? 'flex' : 'none' }}>
           {tab === 'Buluşma' && <>
             <Section><Label>Henüz bir mekân fikriniz yok mu?</Label><Button label="Buluşma planı oluştur" icon={Sparkles} tone="secondary" onPress={() => setEngine('Buluşma planı')} /></Section>
-            <Section><Heading>Mekân bul</Heading>
+            <Section><Heading>1. Nerede, ne yapacaksınız?</Heading>
               <Field label="Şehir" value={m.input.city} maxLength={80} editable={!disabled && !m.hasScenario} onChangeText={city => m.setInput({ ...m.input, city })} />
               <VenuePicker selected={m.input.categories?.length ? m.input.categories : [m.input.category]} disabled={disabled || m.hasScenario}
                 onChange={ids => m.setInput({ ...m.input, category: ids[0]!, categories: ids })} />
-              <Label>Varsayılan ulaşım</Label><Segmented items={travelModes.map(x => x.label)} value={travelModes.find(x => x.id === (m.input.travelMode || 'driving'))!.label} disabled={disabled || m.hasScenario}
-                onChange={label => m.setInput({ ...m.input, travelMode: travelModes.find(x => x.label === label)!.id })} />
+            </Section>
+            <Section><View style={styles.between}><Heading>2. Kimler geliyor?</Heading><Users color={t.accent} size={22} /></View>
+              {m.config?.capabilities?.rooms_v1 && <Segmented items={['Ben gireyim', 'Oda kur']} value={entry} disabled={disabled || m.hasScenario} onChange={value => {
+                setEntry(value); m.setParsed([]);
+                if (value === 'Ben gireyim' && m.input.participants.length < 2) m.setInput(current => ({ ...current, participants: makeParticipants(3) }));
+              }} />}
+              {roomMode ? <RoomHost m={m} /> : <>
+              <Label secondary>Herkesin adını ve nereden geleceğini girin.</Label>
               <Stepper label="Kişi sayısı" min={2} max={m.config?.max_participants || 8} value={m.input.participants.length} disabled={disabled || m.hasScenario}
                 onChange={count => { m.setInput({ ...m.input, participants: Array.from({ length: count }, (_, i) => m.input.participants[i] || makeParticipants(count)[i]!) }); m.setParsed([]); }} />
-            </Section>
-            <Section><View style={styles.between}><Heading>Kişi konumları</Heading><Users color={t.accent} size={22} /></View>
-              {m.config?.capabilities?.rooms_v1 && <Segmented items={['Ben gireyim', 'Oda kur']} value={entry} disabled={disabled} onChange={setEntry} />}
-              {m.config?.capabilities?.rooms_v1 && entry === 'Oda kur' && <RoomHost m={m} />}
-              <Button label="Kişiler dengeli" icon={CheckCheck} tone="secondary" disabled={disabled} onPress={() => m.setInput({ ...m.input, participants: m.input.participants.map(p => ({ ...p, delta_weight: 1 })) })} />
-              {m.input.participants.map((person, index) => <View key={index} style={{ padding: 16, borderWidth: 1, borderColor: t.divider, borderRadius: 10, backgroundColor: t.surface, gap: 16 }}>
+              <Label>Varsayılan ulaşım</Label><Segmented items={travelModes.map(x => x.label)} value={travelModes.find(x => x.id === (m.input.travelMode || 'driving'))!.label} disabled={disabled || m.hasScenario}
+                onChange={label => m.setInput({ ...m.input, travelMode: travelModes.find(x => x.label === label)!.id })} />
+              {m.input.participants.map((person, index) => <View key={index} style={{ padding: 16, borderWidth: 1, borderColor: t.divider, borderRadius: 12, backgroundColor: t.accentTint, gap: 14 }}>
                 <Field label={`${index + 1}. kişinin adı`} value={person.label} maxLength={80} editable={!disabled && !m.hasScenario}
                   onChangeText={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, label } : p) }); m.setParsed([]); }} />
                 <Field label={`${index + 1}. kişinin konumu`} placeholder="Yer adı (ör. Ankara Kalesi), harita linki veya enlem,boylam" value={person.value} autoCapitalize="none" maxLength={2048} editable={!disabled && !m.hasScenario}
@@ -128,39 +133,42 @@ function MobileApp({ appearance, setAppearance, isDark }: { appearance: string; 
                 {person.place ? <Label secondary>{`Seçilen: ${person.place}`}</Label> : null}
                 {!m.hasScenario && m.config?.capabilities?.place_search_v1 && <PlaceSearch query={person.value} api={m.api} disabled={disabled || offline}
                   onPick={place => { m.setInput(current => ({ ...current, participants: current.participants.map((p, i) => i === index ? { ...p, value: `${place.lat},${place.lng}`, place: place.address && place.address !== place.name ? `${place.name}, ${place.address}` : place.name } : p) })); m.setParsed([]); }} />}
+                {!m.hasScenario && <Button label={locating === index ? 'Konum alınıyor' : `Konumumu ${person.label} için kullan`} icon={LocateFixed} tone="secondary" disabled={disabled} onPress={() => void useLocation(index)} />}
                 <Label>{`${person.label} ulaşımı`}</Label><Segmented items={['Varsayılan', ...travelModes.map(x => x.label)]} disabled={disabled || m.hasScenario}
                   value={person.travel_mode ? travelModes.find(x => x.id === person.travel_mode)!.label : 'Varsayılan'}
                   onChange={label => { m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, travel_mode: travelModes.find(x => x.label === label)?.id || '' } : p) }); m.setParsed([]); }} />
-                {!m.hasScenario && <Button label={locating === index ? 'Konum alınıyor' : `Konumumu ${person.label} için kullan`} icon={LocateFixed} tone="secondary" disabled={disabled} onPress={() => void useLocation(index)} />}
-                <Stepper label={`${person.label} yakınlık ağırlığı`} min={0.5} max={2} step={0.5} suffix="×" value={person.delta_weight} disabled={disabled}
+                <Stepper label={`${person.label} ağırlığı`} min={0.5} max={2} step={0.5} suffix="×" value={person.delta_weight} disabled={disabled}
                   onChange={delta_weight => m.setInput({ ...m.input, participants: m.input.participants.map((p, i) => i === index ? { ...p, delta_weight } : p) })} />
-                {m.parsed[index] ? <Notice error={!!m.parsed[index]!.error}>{m.parsed[index]!.error || 'Konum doğrulandı.'}</Notice> : null}
+                {m.parsed[index]?.error ? <Notice error>{m.parsed[index]!.error}</Notice> : null}
               </View>)}
-              <Notice>Konumlar oturumluk işlenir ve en geç iki saatte sunucudan silinir. Ham linkler kalıcı kaydedilmez.</Notice>
-              {!m.hasScenario && <Button label="Konumları doğrula" icon={CheckCheck} tone="secondary" onPress={() => void m.validate()} disabled={disabled || offline || !m.config} />}
+              <Label secondary>Ağırlığı yüksek kişiye yakın yerler öne çıkar. Konumlar yalnızca bu arama için kullanılır ve en geç iki saatte sunucudan silinir.</Label>
+              </>}
             </Section>
-            <Section><Button label="Tercihlere geç" icon={ArrowRight} onPress={() => setTab('Tercihler')} disabled={disabled} />
+            <Section><Button label="3. Tercihlere geç" icon={ArrowRight} onPress={() => setTab('Tercihler')} disabled={disabled} />
               {m.hasScenario && <Button label="Yeni buluşma için mevcut verileri sil" icon={Trash2} tone="danger" disabled={disabled} onPress={() => setConfirmDelete(true)} />}
             </Section>
           </>}
 
           {tab === 'Tercihler' && <>
-            <Section><Heading>Seçim kriterleri</Heading>
+            <Section><Heading>Neye önem veriyorsunuz?</Heading>
               <Segmented items={profiles.map(p => p.label)} disabled={disabled} value={profiles.find(p => JSON.stringify(p.weights) === JSON.stringify(m.preferences.weights))?.label || ''}
                 onChange={label => m.setPreferences({ ...m.preferences, weights: { ...profiles.find(p => p.label === label)!.weights } })} />
+              <WeightSummary weights={m.preferences.weights} />
+              {conditionLines(m.preferences.conditions).map(line => <Notice key={line}>{line}</Notice>)}
+              {conditionLines(m.preferences.conditions).length > 0 && <Button label="Kesin koşulları kaldır" tone="secondary" disabled={disabled} onPress={() => m.setPreferences({ ...m.preferences, conditions: undefined })} />}
+              <Toggle label="Ayrıntılı ayarlar" value={advanced} onChange={setAdvanced} />
+              {advanced && <>
               {(Object.keys(weightLabels) as Array<keyof CriterionWeights>).map(key => <WeightSlider key={key} label={weightLabels[key]} value={m.preferences.weights[key]} disabled={disabled}
                 onChange={value => m.setPreferences({ ...m.preferences, weights: rebalanceWeights(m.preferences.weights, key, value) })} />)}
-              <WeightSummary weights={m.preferences.weights} />
               <Stepper label="Öneri sayısı" min={1} max={m.config?.max_k || 3} value={m.preferences.k} disabled={disabled} onChange={k => m.setPreferences({ ...m.preferences, k })} />
               <Toggle label="En düşük mekân puanı" value={m.preferences.minRating !== null} disabled={disabled} onChange={on => m.setPreferences({ ...m.preferences, minRating: on ? 4 : null })} />
               {m.preferences.minRating !== null && <Stepper label="Minimum puan" min={0} max={5} step={0.5} value={m.preferences.minRating} disabled={disabled} onChange={minRating => m.setPreferences({ ...m.preferences, minRating })} />}
               <Toggle label="Kişi başına süre sınırı" value={m.preferences.maxMinutes !== null} disabled={disabled} onChange={on => m.setPreferences({ ...m.preferences, maxMinutes: on ? 30 : null })} />
-              {conditionLines(m.preferences.conditions).map(line => <Notice key={line}>{line}</Notice>)}
-              {conditionLines(m.preferences.conditions).length > 0 && <Button label="Kesin koşulları kaldır" tone="secondary" disabled={disabled} onPress={() => m.setPreferences({ ...m.preferences, conditions: undefined })} />}
               {m.preferences.maxMinutes !== null && <Stepper label="En fazla dakika" min={5} max={240} step={5} value={m.preferences.maxMinutes} disabled={disabled} onChange={maxMinutes => m.setPreferences({ ...m.preferences, maxMinutes })} />}
               <Label secondary>Fiyat seviyesi gerçek bir TL tutarı değildir. Yol süreleri her kişinin seçtiği ulaşım biçimine göredir; kişi ağırlıkları yalnızca yakınlık tercihini değiştirir.</Label>
+              </>}
             </Section>
-            <Section><View style={styles.between}><Heading>İsteğini anlat</Heading><Sparkles color={t.primary} size={22} /></View>
+            <Section><View style={styles.between}><Heading>Ya da isteğinizi yazın</Heading><Sparkles color={t.primary} size={22} /></View>
               <Label secondary>{m.health?.ai_ready ? `Sunucudaki model: ${m.health.ai_model}` : 'Yapay zekâ hazır değilse manuel tercihler kullanılabilir.'}</Label>
               <Field label="Buluşma tercihiniz" multiline numberOfLines={4} maxLength={500} value={m.text} editable={!disabled} onChangeText={m.setText}
                 placeholder="Fiyat önemli; Kişi 1'e iki kat yakın olsun." style={{ minHeight: 112, textAlignVertical: 'top' }} />

@@ -11,6 +11,7 @@ export class SearchSession {
   routesReady = false;
   key = '';
   private validated: { key: string; locations: ParsedLocation[] } | null = null;
+  lastParsed: ParsedLocation[] = [];
 
   constructor(private api: MobileApi) {}
 
@@ -20,6 +21,7 @@ export class SearchSession {
     if (this.validated?.key === key) return this.validated.locations;
     const locations = await this.api.parse(input.participants);
     if (locations.length !== input.participants.length) throw new Error('Konumların tümü doğrulanamadı.');
+    this.lastParsed = locations;
     if (locations.every(p => !p.error && p.lat !== null && p.lng !== null && Number.isFinite(p.lat) && Number.isFinite(p.lng))) this.validated = { key, locations };
     return locations;
   }

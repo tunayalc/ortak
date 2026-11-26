@@ -29,7 +29,7 @@ import { api } from './api.js'
 import MeetingPlanner from './MeetingPlanner'
 import PlaceComparison from './PlaceComparison'
 import { RoomHost } from './GroupInvite'
-import { PlacePicker } from './LocationTools'
+import { PlacePicker, WeightSelect } from './LocationTools'
 import { ConditionsEditor, ConditionsSummary, emptyConditions, StatusNotice, WorkflowNav } from './ui'
 import { checkedConditions, planSearchInput, rebalanceWeights, travelModes } from './planner'
 import { categories, MAX_CATEGORIES } from './catalog'
@@ -269,102 +269,104 @@ function LocationPanel({
   travelMode,
   setTravelMode,
   inputMode,
-  setInputMode,
+  chooseMode,
   roomMode,
-  setRoomMode,
   roomPanel,
   participantLocations,
   updateParticipant,
-  balanceParticipants,
+  groupSize,
+  setGroupSize,
+  maxParticipants,
   parsedLocations,
-  onParse,
   busy,
 }) {
+  const manual = inputMode === 'link' && !roomMode
+  const modes = [
+    { id: 'manual', active: manual, icon: LinkIcon, title: 'Konumları ben gireyim', helper: 'Herkesin adını ve yerini siz yazarsınız.' },
+    ...(roomPanel !== null ? [{ id: 'room', active: roomMode, icon: DoorOpen, title: 'Oda kur', helper: 'Bağlantıyı paylaşın; herkes kendi adını ve yerini girer.' }] : []),
+  ]
   return (
-    <section className="location-panel">
-      <div className="input-mode-control" role="group" aria-label="Konum girişi">
-        <button className={inputMode === 'synthetic' ? 'active' : ''} onClick={() => { setInputMode('synthetic'); setRoomMode(false) }}>
-          <MapPin size={16} />
-          Sentetik konum
-        </button>
-        <button className={inputMode === 'link' && !roomMode ? 'active' : ''} onClick={() => { setInputMode('link'); setRoomMode(false) }}>
-          <LinkIcon size={16} />
-          Konumları ben gireyim
-        </button>
-        {roomPanel !== null && <button className={roomMode ? 'active' : ''} onClick={() => { setInputMode('link'); setRoomMode(true) }}>
-          <DoorOpen size={16} />
-          Oda kur
-        </button>}
+    <div className="location-panel">
+      <div className="mode-cards" role="group" aria-label="Konum girişi">
+        {modes.map(({ id, active, icon: Icon, title, helper }) => (
+          <button key={id} type="button" className={active ? 'active' : ''} aria-pressed={active} aria-label={title} aria-describedby={`mode-${id}`} onClick={() => chooseMode(id)} disabled={Boolean(busy)}>
+            <Icon size={20} aria-hidden="true" />
+            <strong>{title}</strong>
+            <small id={`mode-${id}`}>{helper}</small>
+          </button>
+        ))}
       </div>
       {roomMode && roomPanel}
-      <div className="participant-panel">
-          <div className="panel-head">
-            <div>
-              <strong>{inputMode === 'link' ? 'Kişi konumları' : 'Kişi yakınlıkları'}</strong>
-              {inputMode === 'link' && <span>{roomMode ? 'Odadan aktarılan konumlar burada görünür' : 'Yer adıyla arayın, cihaz konumunu kullanın veya bağlantı yapıştırın'}</span>}
-            </div>
-            <div className="panel-actions">
-              <button className="secondary" onClick={balanceParticipants} disabled={Boolean(busy)}>
-                <Users size={16} />
-                Kişiler dengeli
-              </button>
-              {inputMode === 'link' && <button className="secondary" onClick={onParse} disabled={Boolean(busy)}>
-                {busy === 'parse' ? <Loader2 size={16} className="spin" /> : <CheckCircle2 size={16} />}
-                Konumları doğrula
-              </button>}
-            </div>
-          </div>
+      {!roomMode && <>
+        <div className="people-toolbar">
+          <label className="people-count">
+            Kişi sayısı
+            <input type="number" min="2" max={maxParticipants} value={groupSize} disabled={Boolean(busy)} onChange={(event) => setGroupSize(Math.min(maxParticipants, Math.max(2, Number(event.target.value))))} />
+          </label>
           <label className="transport-select">
-            {inputMode === 'link' ? 'Varsayılan ulaşım' : 'Ulaşım'}
+            {manual ? 'Varsayılan ulaşım' : 'Ulaşım'}
             <select value={travelMode} onChange={(event) => setTravelMode(event.target.value)} disabled={Boolean(busy)}>
               {travelModes.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
             </select>
           </label>
-          {inputMode === 'link' && <p className="privacy-note">Bu konumlar oturumluk tutulur; ham bağlantılar kalıcı veritabanına yazılmaz. Her kişi için ulaşım biçimini ayrıca seçebilirsiniz.</p>}
-          <div className={`participant-list ${inputMode === 'synthetic' ? 'synthetic' : ''}`}>
-            {participantLocations.map((participant, index) => {
-              const parsed = parsedLocations[index]
-              return (
-                <div className={`participant-row ${inputMode === 'synthetic' ? 'synthetic' : ''}`} key={index}>
-                  {inputMode === 'link' ? <label>
-                    Kişi
-                    <input value={participant.label} onChange={(event) => updateParticipant(index, 'label', event.target.value)} />
+        </div>
+        {inputMode === 'synthetic' && <p className="sample-note">Örnek kişiler şehirde rastgele yerlere yerleştirilir. Gerçek buluşma için yukarıdan bir seçenek seçin.</p>}
+        <div className={`participant-list ${manual ? '' : 'synthetic'}`}>
+          {participantLocations.map((participant, index) => {
+            const parsed = parsedLocations[index]
+            return (
+              <div className={`participant-row ${manual ? '' : 'synthetic'}`} key={index}>
+                <div className="person-head">
+                  <span className="person-num" aria-hidden="true">{index + 1}</span>
+                  {manual ? <label className="person-name">
+                    Ad
+                    <input value={participant.label} maxLength={80} onChange={(event) => updateParticipant(index, 'label', event.target.value)} />
                   </label> : <strong className="participant-name">{participant.label}</strong>}
-                  {inputMode === 'link' && <PlacePicker
-                    label="Yer adı, link veya koordinat"
-                    value={participant.value}
-                    place={participant.place}
-                    disabled={Boolean(busy)}
-                    onChange={(value) => { updateParticipant(index, 'value', value); updateParticipant(index, 'place', '') }}
-                    onPick={(item) => { updateParticipant(index, 'value', `${item.lat},${item.lng}`); updateParticipant(index, 'place', item.address ? `${item.name} (${item.address})` : item.name) }}
-                  />}
-                  {inputMode === 'link' && <label className="transport-select">
+                  {!manual && <WeightSelect name={participant.label} value={participant.delta_weight} disabled={Boolean(busy)} onChange={(value) => updateParticipant(index, 'delta_weight', value)} />}
+                </div>
+                {manual && <PlacePicker
+                  label="Yer adı, link veya koordinat"
+                  value={participant.value}
+                  place={participant.place}
+                  disabled={Boolean(busy)}
+                  onChange={(value) => { updateParticipant(index, 'value', value); updateParticipant(index, 'place', '') }}
+                  onPick={(item) => { updateParticipant(index, 'value', `${item.lat},${item.lng}`); updateParticipant(index, 'place', item.address ? `${item.name} (${item.address})` : item.name) }}
+                />}
+                {manual && <div className="person-options">
+                  <label className="transport-select">
                     Ulaşım
-                    <select value={participant.travel_mode || ''} onChange={(event) => updateParticipant(index, 'travel_mode', event.target.value)}>
+                    <select value={participant.travel_mode || ''} onChange={(event) => updateParticipant(index, 'travel_mode', event.target.value)} disabled={Boolean(busy)}>
                       <option value="">Varsayılan ({modeNames[travelMode]})</option>
                       {travelModes.map((mode) => <option key={mode.value} value={mode.value}>{mode.label}</option>)}
                     </select>
-                  </label>}
-                  <label className={inputMode === 'synthetic' ? 'synthetic-weight' : ''}>
-                    {inputMode === 'link' && 'Yakınlık ağırlığı'}
-                    <input
-                      type="number"
-                      min="0.5"
-                      max="2"
-                      step="0.1"
-                      value={participant.delta_weight}
-                      aria-label={`${participant.label} yakınlık ağırlığı`}
-                      onChange={(event) => updateParticipant(index, 'delta_weight', Number(event.target.value))}
-                    />
                   </label>
-                  {inputMode === 'link' && <div className={`parse-status ${parsed?.error ? 'fail' : parsed?.lat ? 'pass' : ''}`}>
-                    {parsed?.error ? parsed.error : parsed?.lat ? `${parsed.lat}, ${parsed.lng}` : 'Bekliyor'}
-                  </div>}
-                </div>
-              )
-            })}
-          </div>
+                  <WeightSelect name={participant.label} value={participant.delta_weight} disabled={Boolean(busy)} onChange={(value) => updateParticipant(index, 'delta_weight', value)} />
+                </div>}
+                {manual && parsed?.error && <div className="parse-status fail">{parsed.error}</div>}
+              </div>
+            )
+          })}
+        </div>
+        {manual && <p className="privacy-note">Ağırlığı yüksek kişiye yakın yerler öne çıkar. Konumlar yalnızca bu arama için kullanılır, kalıcı kaydedilmez.</p>}
+        <button type="button" className="link-button" onClick={() => chooseMode(inputMode === 'synthetic' ? 'manual' : 'sample')} disabled={Boolean(busy)}>
+          {inputMode === 'synthetic' ? 'Kendi konumlarımı gireceğim' : 'Örnek konumlarla dene'}
+        </button>
+      </>}
+    </div>
+  )
+}
+
+function Step({ number, id, title, hint, children, label }) {
+  return (
+    <section className="step" id={id} tabIndex={id ? -1 : undefined} aria-label={label}>
+      <div className="step-head">
+        <span className="step-num" aria-hidden="true">{number}</span>
+        <div>
+          <h3>{title}</h3>
+          {hint && <p>{hint}</p>}
+        </div>
       </div>
+      {children}
     </section>
   )
 }
@@ -430,7 +432,7 @@ function PreferenceAssistant({
       <div className="assistant-heading">
         <Sparkles size={19} />
         <div>
-          <h2>Tercihini anlat</h2>
+          <h4>Ya da isteğinizi yazın</h4>
           <span role="status">{modelName && `${health.ai_provider === 'ollama' ? 'Yerel model' : 'Bulut modeli'}: ${modelName} - `}{connectionStatus}</span>
         </div>
         <button className="icon-button assistant-connection" title="Model bağlantısını yenile" aria-label="Model bağlantısını yenile" onClick={onCheckConnection} disabled={checkingConnection || Boolean(busy)}>
@@ -611,22 +613,17 @@ function SelectionCriteriaPanel({
   criterionWeights,
   updateCriterionWeight,
   disabled,
+  children,
 }) {
   const normalized = normalizeWeights(criterionWeights)
   return (
-    <section className="criteria-band">
-      <div className="section-label">
-        <SlidersHorizontal size={18} />
-        <div>
-          <strong>Seçim kriterleri</strong>
-          <span>Puan, fiyat ve kişilere yakınlık ayrı ağırlıklarla hesaplanır.</span>
-        </div>
-      </div>
+    <div className="criteria-band">
       <div className="profile-control" role="group" aria-label="Seçim kriteri profili">
         {criteriaProfiles.map((profile) => (
           <button
             key={profile.id}
             className={criteriaProfile === profile.id ? 'active' : ''}
+            aria-pressed={criteriaProfile === profile.id}
             onClick={() => chooseCriteriaProfile(profile.id)}
             disabled={disabled}
           >
@@ -635,33 +632,35 @@ function SelectionCriteriaPanel({
           </button>
         ))}
       </div>
-      <div className="criteria-sliders">
-        {[
-          ['rating', 'Mekân puanı'],
-          ['cost', 'Fiyat uygunluğu'],
-          ['proximity', 'Kişilere yakınlık'],
-        ].map(([key, label]) => (
-          <label key={key}>
-            {label}: {criterionWeights[key]} <span className="weight-hint">etkin {formatWeight(normalized[key])}</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={criterionWeights[key]}
-              onChange={(event) => updateCriterionWeight(key, Number(event.target.value))}
-            />
-          </label>
-        ))}
-      </div>
-    </section>
+      <details className="more-options">
+        <summary>Ayrıntılı ayarlar</summary>
+        <div className="criteria-sliders">
+          {[
+            ['rating', 'Mekân puanı'],
+            ['cost', 'Fiyat uygunluğu'],
+            ['proximity', 'Kişilere yakınlık'],
+          ].map(([key, label]) => (
+            <label key={key}>
+              {label}: {criterionWeights[key]} <span className="weight-hint">etkin {formatWeight(normalized[key])}</span>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={criterionWeights[key]}
+                onChange={(event) => updateCriterionWeight(key, Number(event.target.value))}
+              />
+            </label>
+          ))}
+        </div>
+        {children}
+      </details>
+    </div>
   )
 }
 
-function RecommendationCard({ item, selected, onSelect, manualCost, onManualCostChange }) {
-  const breakdown = item.score_breakdown
-  const costLabel = item.candidate.manual_cost != null ? `${item.candidate.manual_cost} TL/kişi (girilen)` : item.candidate.price_level != null ? `seviye ${item.candidate.price_level}/4` : 'bilinmiyor - Nötr'
+function RecommendationCard({ item, selected, onSelect }) {
+  const costLabel = item.candidate.manual_cost != null ? `${item.candidate.manual_cost} TL/kişi (girilen)` : item.candidate.price_level != null ? ['Ücretsiz', 'Ucuz', 'Orta', 'Pahalı', 'Çok pahalı'][item.candidate.price_level] || `seviye ${item.candidate.price_level}/4` : 'Fiyat bilinmiyor'
   const ratingLabel = item.candidate.rating > 0 ? `${item.candidate.rating.toFixed(1)} puan` : 'Puan bilinmiyor'
-  const costSource = costSourceLabel(item.cost_source)
   const cardLabel = [
     `#${item.rank} ${item.candidate.name}`,
     ratingLabel,
@@ -678,40 +677,21 @@ function RecommendationCard({ item, selected, onSelect, manualCost, onManualCost
         aria-label={cardLabel}
         aria-pressed={selected}
       >
-        <div className="card-rank">#{item.rank}</div>
+        <div className="card-rank">{item.rank}</div>
         <div className="card-copy">
-          <div className="place-line">
-            <h3>{item.candidate.name}</h3>
-            <span>{ratingLabel}</span>
-          </div>
+          <h3>{item.candidate.name}</h3>
           <p>{item.candidate.address}</p>
           <div className="metric-row">
-            <span title={costSource}><DollarSign size={15} /> Fiyat {costLabel}</span>
-            <span><Star size={15} /> Puan {breakdown.rating_norm.toFixed(2)}</span>
-            <span title="Kuş uçuşu mesafeye göre; yolculuk süresinden ayrıdır."><Users size={15} /> Yakınlık {breakdown.proximity_norm.toFixed(2)}</span>
-            <span><Clock3 size={15} /> Ort. {item.t_avg_minutes.toFixed(1)} dk</span>
+            <span><Star size={15} /> {ratingLabel}</span>
+            <span title={costSourceLabel(item.cost_source)}><DollarSign size={15} /> {costLabel}</span>
+            <span><Clock3 size={15} /> Ortalama {item.t_avg_minutes.toFixed(0)} dk, en uzun {item.t_max_minutes.toFixed(0)} dk</span>
           </div>
         </div>
-        <div className="score-pill">{item.score.toFixed(3)}</div>
+        <div className="score-pill" title="Tercihlerinize uyum">%{Math.round(item.score * 100)}<small>uyum</small></div>
       </button>
       <div className="card-footer">
-        <div className="mini-breakdown">
-          <span>Puan etkisi {breakdown.rating_component.toFixed(2)}</span>
-          <span>Fiyat etkisi {breakdown.cost_component.toFixed(2)}</span>
-          <span>Yakınlık etkisi {breakdown.proximity_component.toFixed(2)}</span>
-        </div>
-        <label className="manual-cost" onClick={(event) => event.stopPropagation()}>
-          Kişi başı maliyet (TL)
-          <input
-            type="number"
-            min="0"
-            step="0.5"
-            placeholder="Ops."
-            value={manualCost ?? ''}
-            onChange={(event) => onManualCostChange(item.candidate.id, event.target.value)}
-          />
-        </label>
-        <a href={item.directions_url} target="_blank" rel="noreferrer">
+        <span className="card-hint">{selected ? 'Ayrıntılar yanda' : 'Ayrıntı için seçin'}</span>
+        <a className="button secondary" href={item.directions_url} target="_blank" rel="noreferrer">
           <ExternalLink size={16} />
           Yol tarifi
         </a>
@@ -736,16 +716,7 @@ function GoogleAttribution({ candidate }) {
 }
 
 function DetailPanel({ selected, response }) {
-  if (!selected) {
-    return (
-      <aside className="detail-panel empty-detail">
-        <Info size={22} />
-        <strong>Bir öneri seç</strong>
-        <span>Skor kırılımı ve kişi bazlı süreler burada görünür.</span>
-      </aside>
-    )
-  }
-
+  if (!selected) return null
   const breakdown = selected.score_breakdown
   const criteriaMode = selected.decision_mode === 'criteria_delta'
   const costSource = costSourceLabel(selected.cost_source)
@@ -756,17 +727,26 @@ function DetailPanel({ selected, response }) {
   return (
     <aside className="detail-panel">
       <div className="detail-head">
-        <span>{decisionModeLabel(selected.decision_mode)}</span>
+        <span>{selected.rank}. öneri</span>
         <h2>{selected.candidate.name}</h2>
         <p>{selected.explanation}</p>
-        <p>{selected.directions_note}</p>
       </div>
 
-      {criteriaMode ? (
-        <CriterionBars weights={selected.criterion_weights || response?.criterion_weights} />
-      ) : (
-        <WeightBars weights={selected.effective_weights || response?.effective_weights} />
-      )}
+      <section className="detail-section">
+        <h3>Kim ne kadar yol gider?</h3>
+        <div className="person-list">
+          {selected.per_user.map((user) => (
+            <div key={user.user_id}>
+              <span>{user.label}{user.travel_mode ? ` (${modeNames[user.travel_mode] || user.travel_mode})` : ''}</span>
+              <strong>
+                {user.raw_duration_minutes.toFixed(0)} dk
+                {user.delta_weight !== 1 ? ` · ağırlık ${user.delta_weight.toFixed(1)}×` : ''}
+              </strong>
+            </div>
+          ))}
+        </div>
+        <p className="source-note">{selected.directions_note}</p>
+      </section>
 
       <section className="detail-section">
         <h3>Neden bu mekân?</h3>
@@ -774,22 +754,23 @@ function DetailPanel({ selected, response }) {
         <ScoreBar label="Fiyat uygunluğu" value={breakdown.cost_norm} />
         <ScoreBar label="Kişilere yakınlık" value={criteriaMode ? breakdown.proximity_norm : breakdown.focus_norm} />
         {!criteriaMode && <ScoreBar label="Rapor skoru" value={breakdown.report_score} />}
+        {costWeightUsed && costSource.includes('nötr') && <p className="source-note">Fiyat verisi bulunmadığı için maliyet bileşeni bu adayda 0.50 kabul edildi.</p>}
       </section>
 
-      <section className="detail-section">
-        <h3>Skor kırılımı</h3>
+      <details className="detail-section detail-more">
+        <summary>Teknik ayrıntılar</summary>
+        {criteriaMode ? (
+          <CriterionBars weights={selected.criterion_weights || response?.criterion_weights} />
+        ) : (
+          <WeightBars weights={selected.effective_weights || response?.effective_weights} />
+        )}
         <div className="quality-grid">
           <span>Karar modu <strong>{decisionModeLabel(selected.decision_mode)}</strong></span>
           <span>Fiyat kaynağı <strong>{costSource}</strong></span>
           <span>Yakınlık kaynağı <strong>{focusSource}</strong></span>
           <span>Yakınlık modu <strong>{focusModeLabel(selected.focus_mode)}</strong></span>
         </div>
-        {costWeightUsed && costSource.includes('nötr') && <p className="source-note">Fiyat verisi bulunmadığı için maliyet bileşeni bu adayda 0.50 kabul edildi.</p>}
-      </section>
-
-      {criteriaMode && (
-        <section className="detail-section">
-          <h3>Kişi yakınlık katkısı</h3>
+        {criteriaMode && (
           <div className="person-list">
             {breakdown.proximity_contributions.map((person) => (
               <div key={person.user_id}>
@@ -798,23 +779,8 @@ function DetailPanel({ selected, response }) {
               </div>
             ))}
           </div>
-        </section>
-      )}
-
-      <section className="detail-section">
-        <h3>Kişi bazlı süreler</h3>
-        <div className="person-list">
-          {selected.per_user.map((user) => (
-            <div key={user.user_id}>
-              <span>{user.label}{user.travel_mode ? ` (${modeNames[user.travel_mode] || user.travel_mode})` : ''}</span>
-              <strong>
-                {user.raw_duration_minutes.toFixed(1)} dk
-                {user.delta_weight !== 1 ? ` -> ${user.adjusted_duration_minutes.toFixed(1)} dk (delta ${user.delta_weight.toFixed(1)})` : ''}
-              </strong>
-            </div>
-          ))}
-        </div>
-      </section>
+        )}
+      </details>
     </aside>
   )
 }
@@ -939,7 +905,9 @@ export default function App() {
   const [scenarioForm, setScenarioForm] = useState(initialScenario)
   const [scenario, setScenario] = useState(null)
   const [scenarioContext, setScenarioContext] = useState(null)
-  const [inputMode, setInputMode] = useState('synthetic')
+  const [inputMode, setInputMode] = useState(() => {
+    try { return window.localStorage.getItem('ortak-input-mode') === 'synthetic' ? 'synthetic' : 'link' } catch { return 'link' }
+  })
   const [roomMode, setRoomMode] = useState(false)
   const [participantLocations, setParticipantLocations] = useState(() => makeParticipantRows(initialScenario.group_size))
   const [parsedLocations, setParsedLocations] = useState([])
@@ -1116,18 +1084,6 @@ export default function App() {
     setAiApplied(false)
   }
 
-  function updateManualCost(candidateId, value) {
-    setManualCosts((current) => ({ ...current, [candidateId]: value }))
-  }
-
-  function balanceParticipants() {
-    setParticipantLocations((current) => current.map((item) => ({ ...item, delta_weight: 1 })))
-    setIntentSuggestion(null)
-    setAiApplied(false)
-    if (canReuseRoutes) {
-      refreshRecommendations({ participantWeights: Object.fromEntries(scenario.users.map((user) => [user.id, 1])) })
-    }
-  }
 
   async function interpretIntent() {
     if (interpreting) return
@@ -1213,14 +1169,6 @@ export default function App() {
     }
   }
 
-  async function handleParseLocations() {
-    setError('')
-    try {
-      await parseParticipantLocations()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
 
   async function parseFocusLocation(activeFocusMode = focusMode) {
     const value = focusLocationInput.trim()
@@ -1504,6 +1452,30 @@ export default function App() {
     } finally { setTransferringPlan(false) }
   }
 
+  function chooseMode(mode) {
+    const next = mode === 'sample' ? 'synthetic' : 'link'
+    setInputMode(next); setRoomMode(mode === 'room'); setIntentSuggestion(null)
+    try { window.localStorage.setItem('ortak-input-mode', next) } catch { /* optional */ }
+    if (mode !== 'room' && participantLocations.length < 2) updateForm('group_size', initialScenario.group_size)
+  }
+
+  function syncRoom(points) {
+    const list = points || []
+    setParsedLocations([]); parsedLocationValues.current = ''
+    setParticipantLocations((current) => list.map((point, index) => ({
+      label: point.label || `Katılımcı ${index + 1}`,
+      value: `${point.lat},${point.lng}`,
+      delta_weight: current.find((row) => row.label === point.label)?.delta_weight ?? 1,
+      travel_mode: point.travel_mode || '',
+      place: '',
+    })))
+    setScenarioForm((current) => ({ ...current, group_size: list.length }))
+  }
+
+  const maxParticipants = runtimeConfig?.max_participants || 8
+  const roomWaiting = roomMode && participantLocations.length < 2
+  const venueNames = scenarioForm.categories.map(id => categories.find(item => item.id === id)?.label).join(', ')
+
   return (
     <main className="product-shell">
       <header className="app-header">
@@ -1529,159 +1501,147 @@ export default function App() {
         <button aria-current={engine === 'places' ? 'page' : undefined} onClick={() => setEngine('places')}><MapPin size={18} />Mekân bul</button>
         <button aria-current={engine === 'plans' ? 'page' : undefined} onClick={() => setEngine('plans')}><Sparkles size={18} />Buluşma planı</button>
       </nav>
-      <MeetingPlanner active={engine === 'plans'} maxParticipants={runtimeConfig?.max_participants || 8} available={health?.ai_ready === true}
+      <MeetingPlanner active={engine === 'plans'} maxParticipants={maxParticipants} available={health?.ai_ready === true}
         onTransfer={transferPlan} transferring={transferringPlan || Boolean(busy)} />
       <div hidden={engine !== 'places'} className="places-engine">
-      <WorkflowNav steps={[["place-input", "Kişiler ve konum"], ["place-preferences", "Tercihler"], ["place-results", "Sonuçlar"]]} current={response ? 2 : intentSuggestion ? 1 : 0} />
-      <div className="planner-invitation"><span>Henüz bir mekân fikriniz yok mu?</span><button className="secondary" onClick={() => setEngine('plans')}><Sparkles size={17} />Buluşma planı oluştur</button></div>
-      {planNotice && <p className="privacy-note" role="status">{planNotice}</p>}
-      <section className="control-band" id="place-input" tabIndex={-1}>
-        <h2 className="section-heading">Mekân bul</h2>
-        <div className="control-grid simple-control-grid">
+      <div className="page-intro">
+        <h2>Mekân bul</h2>
+        <p>Herkese uygun buluşma yerini üç adımda bulun. Ne yapacağınıza karar vermediyseniz <button type="button" className="link-button inline" onClick={() => setEngine('plans')}>Buluşma planı oluştur</button>.</p>
+      </div>
+      {planNotice && <StatusNotice kind="success">{planNotice}</StatusNotice>}
+
+      <Step number={1} id="place-input" title="Nerede, ne yapacaksınız?">
+        <div className="where-grid">
           <label>
             Şehir
             <input maxLength={80} value={scenarioForm.city} onChange={(event) => updateForm('city', event.target.value)} />
           </label>
-          <label>
-            Grup
-            <input type="number" min="2" max={runtimeConfig?.max_participants || 8} value={scenarioForm.group_size} onChange={(event) => updateForm('group_size', Math.min(runtimeConfig?.max_participants || 8, Math.max(2, Number(event.target.value))))} />
-          </label>
-          <label>
-            Top-K
-            <input type="number" min="1" max={runtimeConfig?.max_k || 3} value={k} onChange={(event) => setK(Math.min(runtimeConfig?.max_k || 3, Math.max(1, Number(event.target.value))))} />
-          </label>
+          <details className="venue-picker">
+            <summary><span className="summary-label">Mekân türü ({scenarioForm.categories.length}/{MAX_CATEGORIES})</span><span className="summary-value">{venueNames}</span><span className="summary-action">Değiştir</span></summary>
+            <p className="privacy-note">Birden fazla tür seçebilirsiniz (en fazla {MAX_CATEGORIES}). Arama hepsini birlikte kapsar.</p>
+            {categoryGroups.map(group => (
+              <fieldset key={group}>
+                <legend>{group}</legend>
+                <div className="chips">
+                  {categories.filter(item => item.group === group).map(item => {
+                    const checked = scenarioForm.categories.includes(item.id)
+                    return (
+                      <label key={item.id}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={Boolean(busy) || (!checked && scenarioForm.categories.length >= MAX_CATEGORIES)}
+                          onChange={() => updateForm('categories', checked
+                            ? (scenarioForm.categories.length > 1 ? scenarioForm.categories.filter(id => id !== item.id) : scenarioForm.categories)
+                            : [...scenarioForm.categories, item.id])}
+                        />
+                        {item.label}
+                      </label>
+                    )
+                  })}
+                </div>
+              </fieldset>
+            ))}
+          </details>
         </div>
-        <details className="venue-picker">
-          <summary>Mekân veya etkinlik türü: {scenarioForm.categories.map(id => categories.find(item => item.id === id)?.label).join(', ')} ({scenarioForm.categories.length}/{MAX_CATEGORIES})</summary>
-          <p className="privacy-note">Birden fazla tür seçebilirsiniz; arama hepsini birlikte kapsar. En fazla {MAX_CATEGORIES} tür seçilebilir.</p>
-          {categoryGroups.map(group => (
-            <fieldset key={group}>
-              <legend>{group}</legend>
-              <div className="chips">
-                {categories.filter(item => item.group === group).map(item => {
-                  const checked = scenarioForm.categories.includes(item.id)
-                  return (
-                    <label key={item.id}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={Boolean(busy) || (!checked && scenarioForm.categories.length >= MAX_CATEGORIES)}
-                        onChange={() => updateForm('categories', checked
-                          ? (scenarioForm.categories.length > 1 ? scenarioForm.categories.filter(id => id !== item.id) : scenarioForm.categories)
-                          : [...scenarioForm.categories, item.id])}
-                      />
-                      {item.label}
-                    </label>
-                  )
-                })}
-              </div>
-            </fieldset>
-          ))}
-        </details>
+      </Step>
+
+      <Step number={2} title="Kimler geliyor?" hint={roomMode ? 'Herkes kendi adını ve yerini girer, siz ağırlıkları seçersiniz.' : 'Herkesin nereden geleceğini girin.'}>
         <LocationPanel
           travelMode={scenarioForm.travel_mode}
           setTravelMode={(mode) => updateForm('travel_mode', mode)}
           inputMode={inputMode}
-          setInputMode={(mode) => { setInputMode(mode); setIntentSuggestion(null) }}
+          chooseMode={chooseMode}
           roomMode={roomMode}
-          setRoomMode={setRoomMode}
-          roomPanel={runtimeConfig?.capabilities?.rooms_v1 ? <RoomHost result={response} disabled={Boolean(busy)} onImport={points => {
-            setInputMode('link'); updateForm('group_size', points.length); setParsedLocations([]); parsedLocationValues.current = ''
-            setParticipantLocations(makeParticipantRows(points.length).map((p, i) => ({ ...p, label: points[i].label || p.label, value: points[i].lat + ',' + points[i].lng, travel_mode: points[i].travel_mode || '', place: '' })))
-          }} /> : null}
+          roomPanel={runtimeConfig?.capabilities?.rooms_v1 ? <RoomHost result={response} people={participantLocations} disabled={Boolean(busy)} onSync={syncRoom}
+            onWeight={(index, value) => updateParticipant(index, 'delta_weight', value)} /> : null}
           participantLocations={participantLocations}
           updateParticipant={updateParticipant}
-          balanceParticipants={balanceParticipants}
+          groupSize={scenarioForm.group_size}
+          setGroupSize={(value) => updateForm('group_size', value)}
+          maxParticipants={maxParticipants}
           parsedLocations={parsedLocations}
-          onParse={handleParseLocations}
           busy={busy}
         />
-        <div className="action-row">
-          <button className="primary" onClick={() => runPipeline()} disabled={Boolean(busy) || (!canStartSearch && !canResumeRoutes)}>
-            {busy ? <Loader2 size={18} className="spin" /> : <Play size={18} />}
-            {busy ? busyLabels[busy] || 'Çalışıyor' : canResumeRoutes ? 'Rotaları tamamla' : 'Öneri üret'}
-          </button>
-          {scenario?.session_only && <button className="secondary" onClick={deleteCurrentScenario} disabled={Boolean(busy)} title="Senaryoyu ve konumlarını sil"><Trash2 size={18} /> Senaryoyu sil</button>}
-        </div>
-        {runtimeConfig?.production && <p className="privacy-note">Senaryolar oluşturulduktan en geç iki saat sonra silinir. Konumlar ve ham tercihler kalıcı veritabanına yazılmaz.</p>}
+      </Step>
+
+      <Step number={3} id="place-preferences" label="Mekân tercihleri" title="Neye önem veriyorsunuz?" hint="Bir seçenek seçin ya da isteğinizi kendi cümlenizle yazın.">
+        <SelectionCriteriaPanel
+          criteriaProfile={criteriaProfile}
+          chooseCriteriaProfile={chooseCriteriaProfile}
+          criterionWeights={criterionWeights}
+          updateCriterionWeight={updateCriterionWeight}
+          disabled={Boolean(busy)}
+        >
+          <div className="result-filters" role="group" aria-label="Sonuç filtreleri">
+            <label>
+              En az puan
+              <input type="number" min="0" max="5" step="0.1" placeholder="Sınır yok" value={minRating} onChange={(event) => setMinRating(event.target.value)} />
+            </label>
+            <label>
+              En fazla süre (dk)
+              <input type="number" min="1" step="1" placeholder="Sınır yok" value={maxDuration} onChange={(event) => setMaxDuration(event.target.value)} />
+            </label>
+            <label>
+              Öneri sayısı
+              <input type="number" min="1" max={runtimeConfig?.max_k || 3} value={k} onChange={(event) => setK(Math.min(runtimeConfig?.max_k || 3, Math.max(1, Number(event.target.value))))} />
+            </label>
+          </div>
+          <details className="secondary-options"><summary>Kesin koşullar ve TL bütçesi</summary>
+            <ConditionsEditor value={conditions} onChange={setConditions} disabled={Boolean(busy)} />
+            {conditions.budget_limit && candidateOptions.length > 0 && <fieldset className="conditions-editor" disabled={Boolean(busy)}>
+              <legend>Adayların kişi başı maliyeti</legend>
+              <p>Google fiyat seviyesi TL tutarı değildir. Girdiğiniz tutarlar kullanıcı beyanıdır; gerçek fiyat doğrulaması sayılmaz.</p>
+              <div className="conditions-money">{candidateOptions.map(candidate => <label key={candidate.id}>{candidate.name} (TL/kişi)
+                <input aria-label={`${candidate.name} kişi başı TL`} type="number" min="0" max="10000000" placeholder="Bilinmiyor"
+                  value={manualCosts[candidate.id] ?? ''} onChange={e => setManualCosts(current => ({ ...current, [candidate.id]: e.target.value }))} />
+              </label>)}</div>
+            </fieldset>}
+          </details>
+        </SelectionCriteriaPanel>
+        <ConditionsSummary value={conditions} />
+        <PreferenceAssistant
+          health={health}
+          checkingConnection={checkingAi}
+          onCheckConnection={refreshAiStatus}
+          text={intentText}
+          setText={(value) => { setIntentText(value); setIntentSuggestion(null) }}
+          suggestion={intentSuggestion}
+          onChangeSuggestion={setIntentSuggestion}
+          participants={intentParticipants}
+          onInterpret={interpretIntent}
+          onApply={() => applyIntentSuggestion()}
+          onApplyAndFind={() => applyIntentSuggestion(true)}
+          canFind={canReuseRoutes || canStartSearch}
+          reusesRoutes={canReuseRoutes}
+          googleConfigured={health?.google_configured === true}
+          onDiscard={() => setIntentSuggestion(null)}
+          busy={busy}
+          interpreting={interpreting}
+          contextMode={contextMode}
+          setContextMode={setContextMode}
+        />
+      </Step>
+
+      <div className="search-bar">
+        <button className="primary search-button" onClick={() => runPipeline()} disabled={Boolean(busy) || roomWaiting || (!canStartSearch && !canResumeRoutes)}>
+          {busy ? <Loader2 size={20} className="spin" /> : <Play size={20} />}
+          {busy ? busyLabels[busy] || 'Çalışıyor' : canResumeRoutes ? 'Rotaları tamamla' : 'Buluşma yerini bul'}
+        </button>
+        {scenario?.session_only && <button className="secondary" onClick={deleteCurrentScenario} disabled={Boolean(busy)} title="Bu aramayı ve konumlarını sil"><Trash2 size={18} /> Aramayı sil</button>}
+        {roomWaiting && <p className="privacy-note">Odada en az iki kişinin konum eklemesi bekleniyor.</p>}
+        {busy && <ProgressRail busy={busy} counts={counts} response={response} />}
         {runtimeConfig && !canStartSearch && <p className="error" role="status">{selectedCapacity?.reason || runtimeConfig.google_unavailable_reason || 'Google kullanımı şu anda kapalı veya bağlantı doğrulanmadı.'}{canReuseRoutes && ' Mevcut önerilerin tercihlerini güncelleyebilirsiniz.'}</p>}
-        <ProgressRail busy={busy} counts={counts} response={response} />
-      </section>
-
-      <section id="place-preferences" tabIndex={-1} aria-label="Mekân tercihleri">
-      <PreferenceAssistant
-        health={health}
-        checkingConnection={checkingAi}
-        onCheckConnection={refreshAiStatus}
-        text={intentText}
-        setText={(value) => { setIntentText(value); setIntentSuggestion(null) }}
-        suggestion={intentSuggestion}
-        onChangeSuggestion={setIntentSuggestion}
-        participants={intentParticipants}
-        onInterpret={interpretIntent}
-        onApply={() => applyIntentSuggestion()}
-        onApplyAndFind={() => applyIntentSuggestion(true)}
-        canFind={canReuseRoutes || canStartSearch}
-        reusesRoutes={canReuseRoutes}
-        googleConfigured={health?.google_configured === true}
-        onDiscard={() => setIntentSuggestion(null)}
-        busy={busy}
-        interpreting={interpreting}
-        contextMode={contextMode}
-        setContextMode={setContextMode}
-      />
-      <details className="secondary-options"><summary>Kesin koşullar ve TL bütçesi</summary>
-        <ConditionsEditor value={conditions} onChange={setConditions} disabled={Boolean(busy)} />
-        {conditions.budget_limit && candidateOptions.length > 0 && <fieldset className="conditions-editor" disabled={Boolean(busy)}>
-          <legend>Adayların kişi başı maliyeti</legend>
-          <p>Google fiyat seviyesi TL tutarı değildir. Girdiğiniz tutarlar kullanıcı beyanıdır; gerçek fiyat doğrulaması sayılmaz.</p>
-          <div className="conditions-money">{candidateOptions.map(candidate => <label key={candidate.id}>{candidate.name} (TL/kişi)
-            <input aria-label={`${candidate.name} kişi başı TL`} type="number" min="0" max="10000000" placeholder="Bilinmiyor"
-              value={manualCosts[candidate.id] ?? ''} onChange={e => setManualCosts(current => ({ ...current, [candidate.id]: e.target.value }))} />
-          </label>)}</div>
-        </fieldset>}
-      </details>
-      <ConditionsSummary value={conditions} />
-
-      <SelectionCriteriaPanel
-        criteriaProfile={criteriaProfile}
-        chooseCriteriaProfile={chooseCriteriaProfile}
-        criterionWeights={criterionWeights}
-        updateCriterionWeight={updateCriterionWeight}
-        disabled={Boolean(busy)}
-      />
-
-      <div className="result-filters" role="group" aria-label="Sonuç filtreleri">
-        <label>
-          En az puan
-          <input type="number" min="0" max="5" step="0.1" placeholder="Sınır yok" value={minRating} onChange={(event) => setMinRating(event.target.value)} />
-        </label>
-        <label>
-          En fazla süre (dk)
-          <input type="number" min="1" step="1" placeholder="Sınır yok" value={maxDuration} onChange={(event) => setMaxDuration(event.target.value)} />
-        </label>
       </div>
-      </section>
 
       {error && <StatusNotice kind="error">{error}</StatusNotice>}
-
-      <section className="summary-strip">
-        <div><MapPin size={17} /> {scenario?.city || scenarioForm.city}</div>
-        <div><Users size={17} /> {scenario?.group_size || scenarioForm.group_size} katılımcı</div>
-        <div><Filter size={17} /> {counts.candidates} aday</div>
-        <div><Navigation size={17} /> {counts.routes} rota</div>
-        <div><ShieldCheck size={17} /> {aiApplied ? 'Onaylanan tercih' : profileLabel(criteriaProfile)}</div>
-        <div><Target size={17} /> Kriter bazlı seçim</div>
-        {(scenario?.input_mode || inputMode) === 'link' && <div><ShieldCheck size={17} /> Oturumluk konum</div>}
-        <div><CheckCircle2 size={17} /> {response ? decisionModeLabel(response.decision_mode) : 'Profil hazır'}</div>
-      </section>
 
       <section className="result-layout" id="place-results" tabIndex={-1}>
         <div className="results-column">
           <div className="result-toolbar">
             <div>
-              <h2>Öneriler</h2>
-              <span>{response ? `${response.valid_alternatives} geçerli alternatif, ${recommendations.length} öneri` : 'Henüz sonuç yok'}</span>
+              <h2>Önerilen yerler</h2>
+              <span>{response ? `${recommendations.length} öneri · ${counts.candidates} aday arasından` : 'Arama yapınca öneriler burada görünür.'}</span>
             </div>
             <button className="secondary" onClick={() => refreshRecommendations()} disabled={!canReuseRoutes || Boolean(busy)}>
               <RefreshCcw size={16} />
@@ -1700,23 +1660,22 @@ export default function App() {
                   item={item}
                   selected={selected?.candidate.id === item.candidate.id}
                   onSelect={(next) => setSelectedId(next.candidate.id)}
-                  manualCost={manualCosts[item.candidate.id]}
-                  onManualCostChange={updateManualCost}
                 />
               ))
-            ) : (
+            ) : response ? (
               <div className="empty-results">
                 <Route size={30} />
-                <strong>{response ? 'Kısıtlara uygun mekân bulunamadı' : 'Senaryo hazır'}</strong>
-                <span>{response ? 'Koşullarınız korundu. Fiyat veya zorunlu özellikler doğrulanamıyorsa uygunluk iddia edilmez.' : 'Henüz arama yapılmadı.'}</span>
+                <strong>Kısıtlara uygun mekân bulunamadı</strong>
+                <span>Koşullarınız korundu. Fiyat veya zorunlu özellikler doğrulanamıyorsa uygunluk iddia edilmez.</span>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
-        <DetailPanel selected={selected} response={response} />
+        {response && <DetailPanel selected={selected} response={response} />}
       </section>
 
-      <section className="tabs-section">
+      <details className="research-tools">
+        <summary>Araştırma ayrıntıları (model, karşılaştırma, rapor)</summary>
         <div className="tabs">
           {[
             ['recommendations', 'Öneri özeti'],
@@ -1746,7 +1705,7 @@ export default function App() {
           {activeTab === 'model' && <ModelDetail response={response} />}
           {activeTab === 'report' && <ReportDraft />}
         </div>
-      </section>
+      </details>
       </div>
       <footer className="app-footer">
         <a href="/privacy.html" target="_blank" rel="noreferrer">Gizlilik</a>

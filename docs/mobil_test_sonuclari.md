@@ -67,17 +67,17 @@ Bu kayıt mağaza kabulü veya canlı mobil uçtan uca başarı belgesi değildi
 ## Arayüz Kabulü
 
 `mobile/tests/ui-smoke.cjs`, yerel Expo önizlemesini Playwright üzerinden
-sınar. Tekrarlı çağrılar dahil 50 doğrulama; bunlar 50 bağımsız native cihaz testi
+sınar. Tekrarlı çağrılar dahil 52 doğrulama; bunlar 52 bağımsız native cihaz testi
 olarak yorumlanmamalıdır.
 
-- Hatalı konum yeni senaryo oluşturmaz; geçerli koordinat ikinci geocode'a gitmez.
-- Oda adıyla kurulur, katılanlar görünür, kayıtlı oda cihazda bağlantısıyla tutulur ve konumlar listeye aktarılır.
+- Hatalı konum yeni senaryo oluşturmaz ve ilgili kişi işaretlenir; geçerli koordinat ikinci geocode'a gitmez.
+- Oda adıyla kurulur; üyeler kendi adı ve konumuyla katılır, yönetici yalnızca ağırlıkları seçer. Hazır üyeler aramaya kendiliğinden eklenir; kayıtlı oda cihazda bağlantısıyla tutulur.
 - Yer adıyla arama yalnızca yazılan metni gönderir; seçilen yer koordinata çevrilir ve adı gösterilir.
 - İlk açılış onayından sonra ayrıca konum veya Llama onay kutusu sorulmaz.
 - Llama önizlemesi onaydan önce ağırlıkları değiştirmez; onayda `2/1/1` uygulanır.
 - Sorun bildirimi uygulama içinden gönderilir; metin ve kişi konumu eklenmez.
 - Eksik rota matrisi öneri olarak sunulmaz; tekrar aynı senaryo/adayları kullanır.
-- Profil, kişi dengesi ve filtre değişiklikleri yeni rota çağrısı üretmez.
+- Profil, kişi ağırlığı ve filtre değişiklikleri yeni rota çağrısı üretmez.
 - Bilinmeyen fiyat, boş sonuç, kota, bağlantı kesintisi ve başarısız silme açıkça gösterilir.
 - Başarısız yeniden sıralama otomatik tekrar döngüsü oluşturmaz.
 - Sekme/profil/onay durumları erişilebilirlik ağacına yansır; klavyeyle sekme seçilir.

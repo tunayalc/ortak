@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { acceptConsent } from './helpers.js'
+import { acceptConsent, openMore } from './helpers.js'
 
 const conditions = { budget_limit: { amount: 2000, scope: 'group', currency: 'TRY' }, excluded_categories: ['museum'], required_features: [] }
 const proposal = { source: 'ollama', model: 'llama3:8b', warnings: [], questions: [],
@@ -38,6 +38,7 @@ test('preview cancel keeps current values; approved transfer preserves condition
   await page.getByRole('button', { name: 'Plan öner', exact: true }).click()
   await page.getByRole('button', { name: 'ORTAK’ta mekân bul' }).first().click()
   await page.getByRole('button', { name: 'Bilgileri aktar' }).click()
+  await openMore(page)
   await page.getByText('Kesin koşullar ve TL bütçesi', { exact: true }).click()
   const preferences = page.getByRole('region', { name: 'Mekân tercihleri' })
   await expect(preferences.getByLabel('TL bütçesi', { exact: true })).toHaveValue('2000')
@@ -105,7 +106,7 @@ test('absolute session expiry removes private inputs and results', async ({ page
   await page.clock.install()
   await overrideRuntime(page, { session_ttl_seconds: 2 })
   await page.reload()
-  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await page.getByRole('button', { name: 'Buluşma yerini bul', exact: true }).click()
   await expect(page.locator('.recommendation-card')).toHaveCount(3)
   await page.clock.fastForward(2100)
   await expect(page.locator('.recommendation-card')).toHaveCount(0)
@@ -116,9 +117,10 @@ test('absolute session expiry removes private inputs and results', async ({ page
 test('unknown price keeps the budget and entered costs reuse routes', async ({ page }) => {
   let routeRequests = 0
   page.on('request', request => { if (request.url().endsWith('/routes/matrix')) routeRequests++ })
+  await openMore(page)
   await page.getByText('Kesin koşullar ve TL bütçesi', { exact: true }).click()
   await page.getByRole('region', { name: 'Mekân tercihleri' }).getByLabel('TL bütçesi', { exact: true }).fill('2000')
-  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await page.getByRole('button', { name: 'Buluşma yerini bul', exact: true }).click()
   await expect(page.getByText('Kısıtlara uygun mekân bulunamadı', { exact: true })).toBeVisible()
   const costs = page.getByRole('group', { name: 'Adayların kişi başı maliyeti' }).getByRole('spinbutton')
   await expect(costs).toHaveCount(12)
@@ -136,9 +138,10 @@ test('older backend cannot silently discard conditions or context', async ({ pag
   await page.getByLabel('Seçim isteği').fill('Fiyat önemli olsun')
   await page.getByRole('button', { name: 'Tercihi yorumla' }).click()
   await expect(page.getByRole('alert')).toContainText('Sunucu bağlamı koruyan')
+  await openMore(page)
   await page.getByText('Kesin koşullar ve TL bütçesi', { exact: true }).click()
   await page.getByRole('region', { name: 'Mekân tercihleri' }).getByLabel('TL bütçesi', { exact: true }).fill('2000')
-  await page.getByRole('button', { name: 'Öneri üret', exact: true }).click()
+  await page.getByRole('button', { name: 'Buluşma yerini bul', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Sunucu kesin koşulları henüz desteklemiyor')
   expect(mutations).toBe(0)
 })

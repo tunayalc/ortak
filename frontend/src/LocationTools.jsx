@@ -58,3 +58,16 @@ export function PlacePicker({ label, value, place, onChange, onPick, disabled, p
     {notice && <small className="place-notice" role="status">{notice}</small>}
   </div>
 }
+
+export const weightOptions = [[0.5, 'Düşük'], [1, 'Normal'], [1.5, 'Yüksek'], [2, 'Çok yüksek']]
+
+/** How much a person's distance counts: higher means places nearer to them rank higher. */
+export function WeightSelect({ name, value, onChange, disabled }) {
+  const current = Number(value ?? 1)
+  const options = weightOptions.some(([v]) => v === current) ? weightOptions : [...weightOptions, [current, `${current}×`]].sort((a, b) => a[0] - b[0])
+  return <label className="weight-select">Ağırlık
+    <select aria-label={`${name} ağırlığı`} value={String(current)} disabled={disabled} onChange={e => onChange(Number(e.target.value))}>
+      {options.map(([v, text]) => <option key={v} value={String(v)}>{text}</option>)}
+    </select>
+  </label>
+}

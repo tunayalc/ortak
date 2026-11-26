@@ -35,7 +35,7 @@ test('plan is independently usable; optional transfer does not launch paid searc
   await page.getByRole('button', { name: 'ORTAK’ta mekân bul', exact: true }).first().click()
   await page.getByRole('button', { name: 'Bilgileri aktar', exact: true }).click()
   await expect(page.getByLabel('Şehir', { exact: true })).toHaveValue('İzmir')
-  await expect(page.getByLabel('Grup', { exact: true })).toHaveValue('4')
+  await expect(page.getByLabel('Kişi sayısı', { exact: true })).toHaveValue('4')
   const locations = page.getByLabel('Yer adı, link veya koordinat', { exact: true })
   await expect(locations).toHaveCount(4)
   for (const field of await locations.all()) await expect(field).toHaveValue('')

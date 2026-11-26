@@ -10,6 +10,8 @@ ORTAK, ücretsiz Oracle Ampere sunucusunda Caddy, FastAPI ve Ollama ile çalış
 - Yayın için Oracle güvenlik listesine yalnızca yönetici IP'sine `/32` geçici SSH kuralı eklendi ve yayından sonra silindi; dışarıdan SSH'nin kapandığı doğrulandı. Kalıcı SSH kuralı, Google kullanım sınırları ve harcama ayarları değiştirilmedi.
 - Aynı gün "Deniz" teması (turkuaz ve sıcak sarı, açık/koyu, metinler WCAG AA) ve yeni "Kesişim" logosu `d8dcefa` ile yayına alındı (API `sha256:5a0b2b4d…`, web `sha256:5a6c579b…`); canlı CSS ve favicon doğrulandı. Geçici SSH kuralı yine eklenip silindi.
 - iOS `0.4.0 (5)` yeni simge ve dSYM'lerle App Store Connect'e yüklendi; `0.4.0 (4)` eski simgeyle kaldı ve kullanılmayacak. `0.3.0 (3)` Apple onayı aldı (Ready for Distribution). Vercel geri dönüş dağıtımı güncellenmedi.
+- 27 Kasım 2026: odalarda her üye kendi adını ve yerini girer, yönetici yalnızca ağırlıkları seçer; kırmızı-beyaz tema (koyu modda nötr gri, kırmızı yalnızca vurgu), sadeleştirilmiş üç adımlı arayüz ve halka biçimli yeni simge `defa740` ile yayına alındı (API `sha256:faac7b0f…`, web `sha256:45b34849…`). Canlı CSS, favicon ve yeni metinler doğrulandı; geçici SSH kuralı eklenip silindi, 22. port yeniden kapalı.
+- iOS `0.4.0 (5)` App Store'da yayında olduğundan yeni sürüm `0.4.1 (6)` olarak yüklendi ve 27 Kasım'da incelemeye gönderildi. Android `0.4.1 (6)` imzasız AAB hazır.
 
 ## 24 Kasım 2026: Etkinlik Türleri, Kişi Bazlı Ulaşım ve İlk Açılış Onayı
 

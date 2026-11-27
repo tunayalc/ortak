@@ -69,10 +69,13 @@ export function RoomHost({ m }: { m: Meeting }) {
     })) }));
   }
   // Keep the search list in step with the room, but never swap locations under a running or finished search.
+  // After the meeting data is deleted the search list is reset, so refill it from the room even if nobody moved.
+  const listed = readySeats.length >= 2 ? readySeats.map(s => s.name).join(';') : '';
+  const missing = Boolean(room) && people.map(p => p.label).join(';') !== listed;
   useEffect(() => {
-    if (!outdated || m.busy || m.hasScenario || busy.current) return;
+    if (!(outdated || missing) || m.busy || m.hasScenario || busy.current) return;
     void run(sync);
-  }, [signature, m.busy, m.hasScenario]);
+  }, [signature, missing, m.busy, m.hasScenario]);
   useEffect(() => {
     if (room) return;
     synced.current = '';

@@ -36,7 +36,7 @@ Yayımlama paketleri `output/mobile/` altında ve Git dışında tutulur.
 `ortak-android-0.1.0-upload-ready.aab` yükleme anahtarıyla imzalıdır.
 `ORTAK-iOS-0.1.0-1.ipa` imzalı App Store paketidir.
 `ORTAK-0.1.0-unsigned.xcarchive` kaynak Xcode arşividir.
-`output/mobile/ios-0.4.1-6/` iOS `0.4.1 (6)` arşivini, `output/mobile/next-0.4.1-6/` Android `0.4.1 (6)` paketini ve imzalama betiğini içerir. `output/mobile/store-0.4.1/` mağaza görsellerinin ham ekranlarını (`raw/`) ve hazır hallerini (`final/iphone`, `final/iphone-6.3`, `final/play`) içerir; Play seti iPhone çerçeveli olduğu için Android ekranlarıyla yeniden üretilmeli. Önceki sürümlerin çıktıları kendi klasörlerinde durur.
+`output/mobile/ios-0.4.1-6/` iOS `0.4.1 (6)` arşivini, `output/mobile/next-0.4.1-6/` Android `0.4.1 (6)` paketini ve imzalama betiğini içerir. `output/mobile/store-0.4.1/` mağaza görsellerinin ham ekranlarını (`raw/`) ve hazır hallerini (`final/iphone`, `final/iphone-6.3`, `final/play`) içerir; Play seti (`final/play`) Android emülatöründen çekilen `raw/android` ekranlarıyla, Android çerçevesiyle üretildi; Play Console'a elle yüklenir. Önceki sürümlerin çıktıları kendi klasörlerinde durur.
 Android paketi yüklenmedi. Canlı web ve mobil API
 doğrulamaları mağaza yayını veya fiziksel cihaz kabulü yerine geçmez. Satıcı beyanı ekranı
 geliştirici e-postasının, yasal ad ve adresin ve geliştirici telefonunun herkese

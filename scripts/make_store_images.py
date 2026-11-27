@@ -1,7 +1,7 @@
 """Compose titled store images from raw simulator screenshots.
 
 Usage: python3 scripts/make_store_images.py <raw_dir> <out_dir>
-Raw screenshots are named like the slide keys below (e.g. iphone/01.png, ipad/01.png).
+Raw screenshots are named like the slide keys below (iphone/01.png, ipad/01.png, android/01.png for Play).
 """
 import sys
 from pathlib import Path
@@ -26,7 +26,8 @@ DEVICES = {
     # canvas, phone screen width, phone top, bezel, screen corner radius (in screen px before scaling), island
     'iphone': dict(size=(1320, 2868), screen_w=1010, top=880, bezel=26, radius=190, island=True, pad=110, scale=1.0),
     'ipad': dict(size=(2064, 2752), screen_w=1560, top=850, bezel=34, radius=60, island=False, pad=170, scale=1.35),
-    'play': dict(size=(1080, 1920), screen_w=700, top=640, bezel=18, radius=190, island=True, pad=80, scale=0.74),
+    # Play shows an Android phone: raw/android captures, punch-hole camera instead of the Dynamic Island
+    'play': dict(size=(1080, 1920), screen_w=700, top=640, bezel=16, radius=110, island=False, punch=True, pad=80, scale=0.74, src='android'),
 }
 
 
@@ -110,11 +111,15 @@ def place_phone(img, shot, d, dark_bg):
         iw, ih = round(sw * 0.285), round(sw * 0.083)
         ix, iy = fx + b + (sw - iw) // 2, fy + b + round(sw * 0.026)
         ImageDraw.Draw(img).rounded_rectangle((ix, iy, ix + iw, iy + ih), ih // 2, fill=(0, 0, 0))
+    if d.get('punch'):
+        cr, cy = round(sw * 0.022), fy + b + round(sw * 0.032)
+        cx = fx + b + sw // 2
+        ImageDraw.Draw(img).ellipse((cx - cr, cy - cr, cx + cr, cy + cr), fill=(0, 0, 0))
 
 
 def compose(raw_dir, out_dir):
     for kind, d in DEVICES.items():
-        src = raw_dir / ('ipad' if kind == 'ipad' else 'iphone')
+        src = raw_dir / d.get('src', 'ipad' if kind == 'ipad' else 'iphone')
         if not src.exists():
             continue
         (out_dir / kind).mkdir(parents=True, exist_ok=True)
